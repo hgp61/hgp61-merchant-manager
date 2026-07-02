@@ -512,6 +512,153 @@ app.put('/api/merchants/:id', requireAuth, (req, res) => {
   res.json({ code: 'OK', data: { ...merchant, password: undefined } });
 });
 
+// ===== 一键部署商户收款后台到 GitHub =====
+const GITHUB_TOKEN = 'TOKEN_REMOVED';
+const GITHUB_USER = 'hgp61';
+
+app.post('/api/merchants/:id/deploy', requireAuth, async (req, res) => {
+  const list = loadMerchants();
+  const merchant = list.find(m => m.id === req.params.id);
+  if (!merchant) return res.status(404).json({ code: 'FAIL', message: '商户不存在' });
+
+  const merchantName = merchant.merchantName || merchant.phone;
+  // 生成安全的仓库名：中文转拼音，去掉非法字符
+  const repoName = merchantName.replace(/[^\w-]/g, '-').toLowerCase().substring(0, 50) + '-' + Date.now().toString(36);
+  const fileName = merchant.fileName || repoName;
+
+  try {
+    // 步骤1：读取模板文件并注入配置
+    const templateDir = merchant.type === 'uid' ? UID_TEMPLATE_DIR : TEMPLATE_DIR;
+    const templateIndex = fs.readFileSync(path.join(templateDir, 'index.js'), 'utf-8');
+    const cashierHtml = fs.readFileSync(path.join(templateDir, 'cashier.html'), 'utf-8');
+    const adminHtml = fs.readFileSync(path.join(templateDir, 'admin.html'), 'utf-8');
+    const logoBuffer = fs.readFileSync(path.join(templateDir, 'logo-pay.png'));
+    const packageJson = fs.readFileSync(path.join(templateDir, 'package.json'), 'utf-8');
+    const loginHtml = fs.readFileSync(path.join(templateDir, 'login.html'), 'utf-8');
+
+    // 构建注入配置
+    const config = {
+      appId: merchant.appId || '',
+      privateKey: merchant.privateKey || '',
+      alipayPublicKey: merchant.alipayPublicKey || '',
+      merchantName: merchant.merchantName || '',
+      merchantPhone: merchant.phone || '',
+      merchantPassword: 'yy123456',
+      merchantContact: merchant.merchantName || '',
+    };
+
+    const injectedIndex = injectConfig(templateIndex, config);
+
+    // 步骤2：创建 GitHub 仓库
+    const createRepoRes = await fetch('https://api.github.com/user/repos', {
+      method: 'POST',
+      headers: {
+        'Authorization': `token ${GITHUB_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      body: JSON.stringify({
+        name: repoName,
+        description: `${merchantName} 收款后台`,
+        private: false,
+        auto_init: false
+      })
+    });
+
+    if (!createRepoRes.ok) {
+      const errData = await createRepoRes.json();
+      // 如果仓库已存在，获取现有仓库信息
+      if (errData.errors && errData.errors.some(e => e.message.includes('already exists'))) {
+        console.log(`[deploy] 仓库 ${repoName} 已存在，跳过创建`);
+      } else {
+        throw new Error(`创建GitHub仓库失败: ${errData.message || createRepoRes.status}`);
+      }
+    } else {
+      const repoData = await createRepoRes.json();
+      console.log(`[deploy] 已创建仓库: ${repoData.full_name}`);
+    }
+
+    // 步骤3：上传所有文件到 GitHub
+    const files = [
+      { path: 'index.js', content: injectedIndex },
+      { path: 'cashier.html', content: cashierHtml },
+      { path: 'admin.html', content: adminHtml },
+      { path: 'logo-pay.png', content: logoBuffer.toString('base64'), isBase64: true },
+      { path: 'package.json', content: packageJson },
+      { path: 'login.html', content: loginHtml },
+      { path: '.gitignore', content: 'node_modules/\ndata/\n*.log\n' },
+      { path: 'README.md', content: `# ${merchantName} 收款后台\n\n部署到 Railway：关联此仓库，Railway 将自动检测并部署。\n\n环境变量说明：\n- PORT: 端口，默认 3001\n- DATA_DIR: 数据存储目录` },
+    ];
+
+    const owner = GITHUB_USER;
+    for (const file of files) {
+      // 先获取文件的当前 SHA（如果存在）
+      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${file.path}`, {
+        headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+      });
+      let sha = null;
+      if (getRes.ok) {
+        const existingFile = await getRes.json();
+        sha = existingFile.sha;
+      }
+
+      // 上传文件
+      const content = file.isBase64
+        ? file.content
+        : Buffer.from(file.content, 'utf-8').toString('base64');
+
+      const uploadRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${file.path}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${GITHUB_TOKEN}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.github.v3+json'
+        },
+        body: JSON.stringify({
+          message: `初始化 ${file.path}`,
+          content: content,
+          ...(sha ? { sha } : {})
+        })
+      });
+
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json();
+        console.error(`[deploy] 上传 ${file.path} 失败:`, err.message);
+      }
+    }
+
+    // 步骤4：更新商户信息中的收款后台地址
+    const githubRepoUrl = `https://github.com/${owner}/${repoName}`;
+    const cashierUrl = `https://${repoName}-production.up.railway.app`;
+
+    merchant.merchantUrl = cashierUrl;
+    merchant.fileName = fileName;
+    saveMerchants(list);
+
+    console.log(`[deploy] 部署完成: ${merchantName} -> ${githubRepoUrl}`);
+
+    res.json({
+      code: 'OK',
+      data: {
+        merchantName: merchantName,
+        githubRepo: githubRepoUrl,
+        railwayUrl: cashierUrl,
+        nextSteps: [
+          '1. 打开上方 GitHub 仓库地址',
+          '2. 在 Railway 中新建项目，关联此 GitHub 仓库',
+          '3. Railway 将自动检测并部署',
+          '4. 部署完成后，访问 Railway 提供的域名即可'
+        ]
+      },
+      message: 'GitHub 仓库已创建，请到 Railway 关联仓库进行部署'
+    });
+
+  } catch (err) {
+    console.error('[deploy] 部署失败:', err);
+    res.status(500).json({ code: 'FAIL', message: err.message || '部署失败' });
+  }
+});
+
 // 收款后台回调：同步商户名称到商户管理系统
 app.post('/api/sync/merchant-name', express.json(), (req, res) => {
   const { phone, name } = req.body;

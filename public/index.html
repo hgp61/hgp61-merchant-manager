@@ -739,6 +739,9 @@
       </div>
     </div>
     <div class="modal-footer">
+      <button class="btn-submit" onclick="deployMerchant()" id="btnDeploy" style="margin-right:10px;">
+        🚀 一键部署
+      </button>
       <button class="btn-cancel" onclick="closeDetailModal()">关闭</button>
     </div>
   </div>
@@ -1150,6 +1153,89 @@ async function saveMerchantName() {
     }
   } catch (e) {
     showToast('网络错误', 'error');
+  }
+}
+
+// ===== 一键部署商户收款后台 =====
+async function deployMerchant() {
+  if (!detailMerchantId) return;
+  const m = merchants.find(x => x.id === detailMerchantId);
+  if (!m) return;
+
+  if (!m.appId && !m.alipayUid) {
+    showToast('该商户尚未配置支付宝信息，无法部署', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnDeploy');
+  btn.disabled = true;
+  btn.textContent = '⏳ 部署中...';
+  showToast('正在创建 GitHub 仓库并上传代码...', 'info');
+
+  try {
+    const res = await fetch(`/api/merchants/${detailMerchantId}/deploy`, {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    const json = await res.json();
+
+    if (json.code === 'OK') {
+      // 更新本地商户数据
+      const idx = merchants.findIndex(x => x.id === detailMerchantId);
+      if (idx !== -1) {
+        merchants[idx].merchantUrl = json.data.railwayUrl;
+      }
+
+      // 显示部署结果
+      const steps = json.data.nextSteps.map((s, i) => `<div style="margin:5px 0;">${s}</div>`).join('');
+      const html = `
+        <div style="text-align:center; padding:20px;">
+          <div style="font-size:48px; margin-bottom:15px;">🎉</div>
+          <div style="color:var(--gold); font-size:18px; font-weight:bold; margin-bottom:10px;">部署准备完成！</div>
+          <div style="margin:15px 0;">
+            <div style="color:var(--text-dim); margin-bottom:5px;">GitHub 仓库</div>
+            <a href="${json.data.githubRepo}" target="_blank" style="color:var(--gold); word-break:break-all;">${json.data.githubRepo}</a>
+          </div>
+          <div style="margin:15px 0;">
+            <div style="color:var(--text-dim); margin-bottom:5px;">Railway 域名（部署后获得）</div>
+            <div style="color:var(--gold);">${json.data.railwayUrl}</div>
+          </div>
+          <div style="text-align:left; background:#141414; padding:15px; border-radius:8px; margin-top:15px;">
+            <div style="color:var(--gold); margin-bottom:10px;">📋 部署步骤：</div>
+            ${steps}
+          </div>
+        </div>
+      `;
+
+      // 创建一个结果弹窗
+      const resultModal = document.createElement('div');
+      resultModal.id = 'deployResultModal';
+      resultModal.className = 'modal-overlay show';
+      resultModal.innerHTML = `
+        <div class="modal">
+          <div class="modal-header">
+            <div class="modal-title">🚀 部署完成</div>
+            <button class="modal-close" onclick="document.getElementById('deployResultModal').remove()">&times;</button>
+          </div>
+          <div class="modal-body">${html}</div>
+          <div class="modal-footer">
+            <button class="btn-submit" onclick="window.open('${json.data.githubRepo}', '_blank')">打开 GitHub 仓库</button>
+            <button class="btn-cancel" onclick="document.getElementById('deployResultModal').remove(); location.reload();">完成</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(resultModal);
+
+      // 关闭详情弹窗
+      closeDetailModal();
+    } else {
+      showToast(json.message || '部署失败', 'error');
+    }
+  } catch (e) {
+    showToast('网络错误，部署失败', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 一键部署';
   }
 }
 
