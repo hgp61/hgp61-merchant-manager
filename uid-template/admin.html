@@ -1,0 +1,4433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>订单管理 - 黄桂鹏商户后台</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    height: 100%;
+    overflow-x: hidden;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    font-weight: bold;
+    background: #070707;
+    color: #e0d8c8;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow-x: hidden;
+    min-height: 100vh;
+    scrollbar-gutter: stable;
+  }
+  /* ===== 黑金流光全局滚动条 ===== */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0f0f0f; }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #f0d77a, #d4af37);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #fff5cc, #f0d77a); }
+  * { scrollbar-width: thin; scrollbar-color: #d4af37 #0f0f0f; }
+
+  /* ===== 黑金流光背景 ===== */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background:
+      radial-gradient(ellipse at 15% 10%, rgba(212,175,55,0.1) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 90%, rgba(180,140,30,0.07) 0%, transparent 45%),
+      radial-gradient(ellipse at 55% 8%, rgba(255,215,0,0.05) 0%, transparent 35%);
+    animation: bgFlow 18s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+  @keyframes bgFlow {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    33%      { transform: translate(-2%, 2%) rotate(1deg); }
+    66%      { transform: translate(2%, -1%) rotate(-1deg); }
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      linear-gradient(105deg, transparent 40%, rgba(212,175,55,0.025) 45%, transparent 50%);
+    animation: lightSweep 10s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+  @keyframes lightSweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* ===== 顶部导航栏 ===== */
+  .topnav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(10,10,12,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(212,175,55,0.18);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    height: 56px;
+    min-height: 56px;
+    box-shadow: 0 2px 24px rgba(0,0,0,0.5);
+  }
+  .topnav::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 5%; right: 5%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(212,175,55,0.35), transparent);
+  }
+  .topnav-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .topnav-logo {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(212,175,55,0.35);
+    box-shadow: 0 2px 12px rgba(212,175,55,0.15);
+    object-fit: cover;
+    display: block;
+  }
+  .topnav-divider {
+    width: 1px; height: 22px;
+    background: rgba(212,175,55,0.25);
+  }
+  .topnav-sub {
+    font-size: 13px;
+    color: rgba(212,175,55,0.6);
+    letter-spacing: 1px;
+  }
+  .topnav-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .topnav-nav a {
+    text-decoration: none;
+    color: rgba(200,190,165,0.7);
+    font-size: 14px;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 8px;
+    transition: all 0.25s;
+    white-space: nowrap;
+    letter-spacing: 1px;
+    line-height: 1.4;
+  }
+  .topnav-nav a:hover {
+    color: #f0d77a;
+    background: rgba(212,175,55,0.08);
+  }
+  .topnav-nav a.active {
+    color: #f0d77a;
+    background: rgba(212,175,55,0.12);
+  }
+  .topnav-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 1;
+  }
+  .topnav-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(200,190,165,0.8);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  .topnav-user:hover {
+    background: rgba(212,175,55,0.08);
+    color: #f0d77a;
+  }
+  .topnav-avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(212,175,55,0.35);
+    background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(180,140,30,0.1));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: #d4af37;
+    font-weight: 700;
+  }
+  .topnav-logout {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(212,175,55,0.3);
+    background: transparent;
+    color: rgba(212,175,55,0.7);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 0.5px;
+    transition: all 0.25s;
+  }
+  .topnav-logout:hover {
+    background: rgba(212,175,55,0.1);
+    border-color: #d4af37;
+    color: #f0d77a;
+    box-shadow: 0 0 15px rgba(212,175,55,0.2);
+  }
+  .topnav-logout svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  /* ===== 主内容区 ===== */
+  .main-wrap {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* 面包屑 */
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 4px 20px;
+    font-size: 12px;
+    color: rgba(212,175,55,0.4);
+    letter-spacing: 1px;
+  }
+  .breadcrumb a {
+    color: rgba(212,175,55,0.5);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .breadcrumb a:hover { color: #f0d77a; }
+  .breadcrumb .sep { font-size: 10px; color: rgba(212,175,55,0.25); }
+  .breadcrumb .current { color: #d4af37; }
+
+  /* ===== 仪表盘卡片 ===== */
+  .dash-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .dash-card {
+    background: rgba(16,16,18,0.9);
+    border-radius: 14px;
+    border: 1px solid rgba(212,175,55,0.15);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 16px rgba(212,175,55,0.03);
+    backdrop-filter: blur(16px);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  .dash-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 5%; right: 5%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(212,175,55,0.3), transparent);
+  }
+  .dash-card-icon {
+    width: 52px; height: 52px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(212,175,55,0.18), rgba(180,140,30,0.08));
+    border: 1px solid rgba(212,175,55,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+  .dash-card-body { flex: 1; }
+  .dash-card-label {
+    font-size: 12px;
+    color: rgba(212,175,55,0.55);
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .dash-card-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #d4af37;
+    letter-spacing: 1px;
+    line-height: 1.2;
+  }
+  .dash-card-sub {
+    font-size: 11px;
+    color: rgba(200,190,165,0.4);
+    margin-top: 4px;
+  }
+
+  /* ===== 双栏布局 ===== */
+  .dash-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+  }
+  .dash-chart-card, .dash-overview-card {
+    background: rgba(16,16,18,0.9);
+    border-radius: 14px;
+    border: 1px solid rgba(212,175,55,0.15);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 16px rgba(212,175,55,0.03);
+    backdrop-filter: blur(16px);
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  .dash-chart-card::before, .dash-overview-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 5%; right: 5%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(212,175,55,0.3), transparent);
+  }
+  .dash-chart-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #d4af37;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(212,175,55,0.1);
+  }
+
+  /* 趋势图时间段选择器 - 黑金流光主题 */
+  .trend-range-selector {
+    position: relative;
+  }
+  .trend-range-btn {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(212,175,55,0.08);
+    border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-size: 12px;
+    color: #d4af37;
+    cursor: pointer;
+    transition: all 0.25s;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+  .trend-range-btn:hover {
+    background: rgba(212,175,55,0.15);
+    border-color: rgba(212,175,55,0.45);
+    box-shadow: 0 2px 10px rgba(212,175,55,0.1);
+  }
+  .trend-range-menu {
+    display: none; position: absolute; top: calc(100% + 6px); right: 0;
+    min-width: 140px;
+    background: linear-gradient(160deg, rgba(18,14,6,0.99), rgba(24,20,12,0.99));
+    border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 10px;
+    padding: 6px 0;
+    z-index: 100;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.7), 0 0 20px rgba(212,175,55,0.06);
+    animation: fadeInDown 0.15s ease;
+  }
+  .trend-range-menu.show { display: block; }
+  @keyframes fadeInDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+  .trend-range-item {
+    padding: 9px 16px; font-size: 13px; color: rgba(200,190,165,0.75);
+    cursor: pointer; transition: all 0.2s;
+    font-weight: 600; letter-spacing: 0.5px;
+  }
+  .trend-range-item:hover {
+    background: rgba(212,175,55,0.08);
+    color: #f0d77a;
+  }
+  .trend-range-item.active {
+    color: #f0d77a;
+    background: rgba(212,175,55,0.12);
+  }
+  .trend-range-item.active::before {
+    content: '✓ '; color: #d4af37; font-weight: 800;
+  }
+  .dash-chart-wrap {
+    width: 100%;
+    min-width: 0;
+    height: 240px;
+    position: relative;
+    overflow: hidden;
+    /* 隐藏滚动条 */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .dash-chart-wrap::-webkit-scrollbar { display: none; }
+  .dash-chart-wrap canvas {
+    min-width: 100%;
+  }
+  .dash-chart-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .dash-overview-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .dash-overview-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(212,175,55,0.06);
+  }
+  .dash-overview-item:last-child { border-bottom: none; }
+  .ov-label {
+    font-size: 12px;
+    color: rgba(200,190,165,0.6);
+    letter-spacing: 1px;
+  }
+  .ov-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: #e0d8c8;
+    letter-spacing: 1px;
+  }
+
+  /* 查看全部 */
+  .view-all-link {
+    font-size: 12px;
+    color: rgba(212,175,55,0.5);
+    text-decoration: none;
+    transition: color 0.2s;
+    letter-spacing: 1px;
+  }
+  .view-all-link:hover { color: #f0d77a; }
+
+  /* ===== 响应式 ===== */
+  @media (max-width: 900px) {
+    .dash-cards { grid-template-columns: repeat(2, 1fr); }
+    .dash-row { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 500px) {
+    .dash-cards { grid-template-columns: 1fr; }
+    .dash-card-value { font-size: 22px; }
+  }
+
+  /* ===== 内容卡片 ===== */
+  .content-card {
+    background: rgba(16,16,18,0.9);
+    border-radius: 14px;
+    border: 1px solid rgba(212,175,55,0.15);
+    box-shadow:
+      0 16px 48px rgba(0,0,0,0.5),
+      0 0 24px rgba(212,175,55,0.03),
+      inset 0 1px 0 rgba(212,175,55,0.06);
+    overflow: hidden;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    position: relative;
+  }
+  .content-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 5%; right: 5%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(212,175,55,0.3), transparent);
+  }
+
+  /* ===== 搜索筛选区 ===== */
+  .filter-section {
+    padding: 20px 24px 8px;
+    border-bottom: 1px solid rgba(212,175,55,0.08);
+  }
+  .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+  .filter-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .filter-label {
+    font-size: 12px;
+    color: rgba(212,175,55,0.55);
+    white-space: nowrap;
+    letter-spacing: 1px;
+  }
+  .filter-input {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(212,175,55,0.15);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #e0d8c8;
+    outline: none;
+    transition: all 0.25s;
+    font-family: inherit;
+    width: 140px;
+  }
+  .filter-input:focus {
+    border-color: #d4af37;
+    box-shadow: 0 0 0 2px rgba(212,175,55,0.08);
+  }
+  .filter-input::placeholder { color: rgba(212,175,55,0.2); }
+  
+  /* 日期输入框 */
+  .date-input-wrap { position: relative; display: inline-flex; align-items: center; }
+  .date-input-wrap .filter-input { 
+    width: 160px; padding-right: 36px; cursor: pointer;
+    font-family: inherit; font-size: 12px; color: #e0d8c8;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(212,175,55,0.2);
+    border-radius: 8px; padding: 8px 36px 8px 12px;
+    outline: none; transition: all 0.25s;
+  }
+  .date-input-wrap .filter-input:hover { border-color: rgba(212,175,55,0.45); }
+  .date-input-wrap .filter-input:focus { border-color: #d4af37; box-shadow: 0 0 0 2px rgba(212,175,55,0.08); }
+  .date-input-wrap .cal-icon {
+    position: absolute; right: 10px; pointer-events: none;
+    color: rgba(212,175,55,0.5); font-size: 15px; line-height: 1;
+  }
+
+  /* 日历弹出层 */
+  .date-picker-popup {
+    display: none; position: absolute; z-index: 999;
+    background: linear-gradient(145deg, rgba(20,18,10,0.98), rgba(26,24,14,0.98));
+    border: 1px solid rgba(212,175,55,0.35);
+    border-radius: 14px; box-shadow: 0 12px 48px rgba(0,0,0,0.7), 0 0 30px rgba(212,175,55,0.08);
+    padding: 16px; margin-top: 6px;
+    backdrop-filter: blur(20px);
+    animation: calFadeIn 0.2s ease;
+  }
+  @keyframes calFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+  .date-picker-popup.show { display: block; min-width: 480px; }
+  
+  .cal-month { min-width: 210px; }
+  .cal-month-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; padding: 0 4px;
+  }
+  .cal-month-title {
+    font-size: 13px; font-weight: 700; color: #d4af37;
+    letter-spacing: 1px;
+  }
+  .cal-nav-btn {
+    background: rgba(212,175,55,0.08); border: 1px solid rgba(212,175,55,0.2);
+    border-radius: 6px; color: #d4af37; width: 26px; height: 26px;
+    font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; font-family: inherit;
+  }
+  .cal-nav-btn:hover { background: rgba(212,175,55,0.2); border-color: #d4af37; }
+  
+  .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 6px; }
+  .cal-weekdays span {
+    text-align: center; font-size: 10px; color: rgba(212,175,55,0.4);
+    padding: 4px 0; font-weight: 600;
+  }
+  
+  .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-day {
+    text-align: center; padding: 7px 0; font-size: 12px; border-radius: 6px;
+    cursor: pointer; color: #c8c0a8; transition: all 0.18s; font-family: inherit;
+    border: 1px solid transparent;
+  }
+  .cal-day:hover { background: rgba(212,175,55,0.15); color: #f0d77a; }
+  .cal-day.other-month { color: rgba(200,185,150,0.2); cursor: default; }
+  .cal-day.other-month:hover { background: transparent; color: rgba(200,185,150,0.2); }
+  .cal-day.today { border-color: rgba(212,175,55,0.3); font-weight: 700; }
+  .cal-day.in-range { background: rgba(212,175,55,0.18); border-radius: 0; color: #d4af37; font-weight: 600; }
+  .cal-day.range-start, .cal-day.range-end {
+    background: linear-gradient(135deg, #c99c2c, #d4af37) !important;
+    color: #0a0a0a !important; font-weight: 700; border-radius: 6px;
+  }
+  .cal-day.range-start { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .cal-day.range-end { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+  .cal-day.range-both { border-radius: 6px !important; }
+  .cal-day.cal-disabled {
+    color: rgba(200,185,150,0.18) !important;
+    cursor: not-allowed !important;
+    background: transparent !important;
+    border-color: transparent !important;
+  }
+  .cal-day.cal-disabled:hover {
+    color: rgba(200,185,150,0.18) !important;
+    background: transparent !important;
+  }
+  
+  .cal-footer {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding-top: 12px; border-top: 1px solid rgba(212,175,55,0.1);
+    margin-top: 4px;
+  }
+  .cal-footer button {
+    background: transparent; border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 6px; color: #d4af37; padding: 5px 16px;
+    font-size: 11px; cursor: pointer; transition: all 0.2s; font-family: inherit;
+    letter-spacing: 1px;
+  }
+  .cal-footer button:hover { background: rgba(212,175,55,0.1); border-color: #d4af37; }
+  .cal-footer button.confirm-btn { background: linear-gradient(135deg, #c99c2c, #d4af37); color: #0a0a0a; border-color: transparent; font-weight: 600; }
+  .cal-footer button.confirm-btn:hover { box-shadow: 0 2px 12px rgba(212,175,55,0.3); }
+
+  /* ===== 日历改版：黑金流光主题 ===== */
+  .cal-range-header {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding-bottom: 12px; margin-bottom: 10px;
+    border-bottom: 1px solid rgba(212,175,55,0.15);
+  }
+  .cal-range-header span { font-size: 13px; font-weight: 700; }
+  .cal-range-start { color: #d4af37; }
+  .cal-range-end { color: #d4af37; }
+  .cal-range-sep { color: rgba(212,175,55,0.35); }
+
+  /* 快捷按钮 - 黑金流光 */
+  .cal-btn-quick {
+    background: transparent; border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 6px; color: #d4af37; padding: 6px 14px;
+    font-size: 11px; cursor: pointer; transition: all 0.25s; font-family: inherit;
+    letter-spacing: 1px; font-weight: 600;
+  }
+  .cal-btn-quick:hover {
+    background: linear-gradient(135deg, rgba(212,175,55,0.12), rgba(180,140,30,0.06));
+    border-color: #d4af37; box-shadow: 0 0 12px rgba(212,175,55,0.1);
+  }
+
+  /* 取消按钮 */
+  .cal-btn-cancel {
+    background: transparent; border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 6px; color: rgba(212,175,55,0.7); padding: 6px 18px;
+    font-size: 11px; cursor: pointer; transition: all 0.25s; font-family: inherit;
+    letter-spacing: 1px; font-weight: 600;
+  }
+  .cal-btn-cancel:hover {
+    background: rgba(212,175,55,0.08); border-color: rgba(212,175,55,0.45);
+  }
+
+  /* 确定按钮 - 黑金流光高亮 */
+  .cal-btn-confirm {
+    background: linear-gradient(135deg, #c99c2c, #d4af37) !important;
+    border: none !important; border-radius: 6px !important;
+    color: #0a0a0a !important; padding: 7px 22px !important;
+    font-size: 12px !important; cursor: pointer; transition: all 0.25s;
+    font-family: inherit; letter-spacing: 2px; font-weight: 700;
+    box-shadow: 0 2px 10px rgba(212,175,55,0.2);
+  }
+  .cal-btn-confirm:hover {
+    box-shadow: 0 4px 20px rgba(212,175,55,0.4);
+    transform: translateY(-1px);
+  }
+  .cal-btn-confirm:active { transform: translateY(0); }
+  .filter-select {
+    background: rgba(26,26,30,0.9);
+    border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 8px;
+    padding: 8px 32px 8px 12px;
+    font-size: 12px;
+    color: #d4c8a8;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    font-family: inherit;
+    transition: all 0.25s;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23d4af37' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    color-scheme: dark;
+  }
+  .filter-select:hover {
+    border-color: rgba(212,175,55,0.45);
+    background: rgba(30,28,20,0.95);
+  }
+  .filter-select:focus {
+    border-color: #d4af37;
+    box-shadow: 0 0 0 2px rgba(212,175,55,0.12), 0 0 12px rgba(212,175,55,0.06);
+    background: rgba(30,28,20,0.95);
+  }
+  .filter-select option {
+    background: #1a1a1e;
+    color: #d4c8a8;
+    padding: 8px 12px;
+  }
+  .filter-select option:hover,
+  .filter-select option:checked {
+    background: linear-gradient(135deg, rgba(201,156,44,0.3), rgba(212,175,55,0.2));
+    color: #d4af37;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    font-family: inherit;
+    transition: all 0.25s;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #d4af37 0%, #f0d77a 50%, #b8860b 100%);
+    color: #0a0a0a;
+    box-shadow: 0 4px 16px rgba(212,175,55,0.25), inset 0 1px 0 rgba(255,255,255,0.15);
+    border: none;
+    padding: 10px 26px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.25s;
+    white-space: nowrap;
+  }
+  .btn-primary:hover {
+    box-shadow: 0 6px 24px rgba(212,175,55,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+    transform: translateY(-2px);
+    filter: brightness(1.08);
+  }
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid rgba(212,175,55,0.35);
+    color: #d4af37;
+  }
+  .btn-outline:hover {
+    background: rgba(212,175,55,0.1);
+    border-color: rgba(212,175,55,0.6);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: rgba(212,175,55,0.65);
+    border: 1px solid transparent;
+  }
+  .btn-ghost:hover {
+    color: #d4af37;
+    background: rgba(212,175,55,0.06);
+  }
+
+  .btn-pagination {
+    padding: 5px 10px;
+    font-size: 11px;
+    border-radius: 6px;
+  }
+
+  /* ===== 数据表格 ===== */
+  .table-section {
+    padding: 0;
+    overflow-x: auto;
+  }
+  .table-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid rgba(212,175,55,0.08);
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .table-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f0d77a;
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .table-title::before {
+    content: '';
+    display: inline-block;
+    width: 3px; height: 16px;
+    background: linear-gradient(180deg, #f0d77a, #d4af37);
+    border-radius: 2px;
+  }
+  .table-info {
+    font-size: 11px;
+    color: rgba(212,175,55,0.4);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .table-info span { color: #d4af37; font-weight: 600; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 13px;
+  }
+  table thead th {
+    background: rgba(212,175,55,0.04);
+    color: rgba(212,175,55,0.65);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 1px;
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid rgba(212,175,55,0.12);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  /* 固定列宽：订单号28% / 支付金额12% / 支付方式10% / 支付状态12% / 创建日期20% / 操作18% */
+  table thead th:nth-child(1) { width: 28%; }
+  table thead th:nth-child(2) { width: 12%; }
+  table thead th:nth-child(3) { width: 10%; }
+  table thead th:nth-child(4) { width: 12%; }
+  table thead th:nth-child(5) { width: 20%; }
+  table thead th:nth-child(6) { width: 18%; }
+
+  table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: #c8c0ae;
+    white-space: nowrap;
+    transition: background 0.2s;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table tbody tr:hover td {
+    background: rgba(212,175,55,0.03);
+  }
+  table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* 金额特殊样式 */
+  .amount-cell {
+    color: #f0d77a;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+  }
+
+  /* 订单号列样式 */
+  .order-no-cell {
+    color: #d4af37;
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 状态标签 */
+  .status-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .status-success {
+    background: rgba(76, 175, 80, 0.12);
+    color: #81c784;
+    border: 1px solid rgba(76, 175, 80, 0.25);
+  }
+  .status-pending {
+    background: rgba(255, 152, 0, 0.12);
+    color: #ffb74d;
+    border: 1px solid rgba(255, 152, 0, 0.25);
+  }
+  .status-failed {
+    background: rgba(244, 67, 54, 0.12);
+    color: #ef9a9a;
+    border: 1px solid rgba(244, 67, 54, 0.25);
+  }
+  .status-refund {
+    background: rgba(156, 39, 176, 0.12);
+    color: #ce93d8;
+    border: 1px solid rgba(156, 39, 176, 0.25);
+  }
+  .status-closed {
+    background: rgba(158, 158, 158, 0.12);
+    color: #bdbdbd;
+    border: 1px solid rgba(158, 158, 158, 0.25);
+  }
+  .status-none {
+    background: rgba(212,175,55,0.06);
+    color: rgba(212,175,55,0.45);
+    border: 1px solid rgba(212,175,55,0.12);
+  }
+  .status-generated {
+    background: rgba(33, 150, 243, 0.12);
+    color: #64b5f6;
+    border: 1px solid rgba(33, 150, 243, 0.25);
+  }
+  .status-paying {
+    background: rgba(255, 193, 7, 0.12);
+    color: #ffd54f;
+    border: 1px solid rgba(255, 193, 7, 0.25);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* 创建日期双行 */
+  .date-cell {
+    line-height: 1.8;
+    font-size: 11px;
+  }
+  .date-cell .date-row {
+    display: block;
+  }
+  .date-cell .date-label {
+    color: rgba(212,175,55,0.4);
+    font-size: 10px;
+    margin-right: 4px;
+  }
+
+  /* 退款按钮 */
+  .btn-refund {
+    background: rgba(244, 67, 54, 0.1);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+    color: #ef9a9a;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .btn-refund:hover {
+    background: rgba(244, 67, 54, 0.2);
+    border-color: rgba(244, 67, 54, 0.5);
+    box-shadow: 0 2px 10px rgba(244, 67, 54, 0.15);
+  }
+  .refund-info {
+    font-size: 11px;
+    color: rgba(212,175,55,0.5);
+    margin-left: 6px;
+  }
+
+  /* 退款确认弹窗 */
+  .modal-overlay {
+    display: none;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 10002;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-dialog {
+    background: linear-gradient(145deg, rgba(20,18,10,0.98), rgba(26,24,14,0.98));
+    border: 1px solid rgba(212,175,55,0.3);
+    border-radius: 14px;
+    padding: 28px 32px;
+    min-width: 400px; max-width: 480px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 30px rgba(212,175,55,0.08);
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn { from { opacity:0; transform:scale(0.95) translateY(-10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+  .modal-title {
+    font-size: 16px; font-weight: 700; color: #f0d77a;
+    letter-spacing: 2px; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .modal-title::before {
+    content: '⚠';
+    font-size: 18px;
+  }
+  .modal-title.success-title::before {
+    content: none;
+  }
+  .modal-info {
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px; padding: 14px 16px; margin-bottom: 18px;
+    font-size: 13px; color: #c8c0ae; line-height: 2;
+  }
+  .modal-info span { color: #d4af37; font-weight: 600; }
+  #refundOrderNo {
+    display: block;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(220,53,69,0.6);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-top: 6px;
+    font-size: 15px;
+    word-break: break-all;
+  }
+  .modal-label {
+    display: block; font-size: 12px; color: rgba(212,175,55,0.55);
+    margin-bottom: 6px; letter-spacing: 1px;
+  }
+  .modal-input {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(212,175,55,0.2);
+    border-radius: 8px; padding: 10px 12px;
+    font-size: 14px; color: #f0d77a; outline: none;
+    font-family: inherit; font-weight: 700;
+    transition: all 0.25s; margin-bottom: 20px;
+  }
+  .modal-input:focus {
+    border-color: #d4af37;
+    box-shadow: 0 0 0 2px rgba(212,175,55,0.1);
+  }
+  .modal-btns {
+    display: flex; gap: 10px; justify-content: flex-end;
+  }
+  .btn-danger {
+    background: linear-gradient(135deg, #d32f2f, #f44336);
+    color: #fff; border: none;
+    padding: 9px 22px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    font-family: inherit; letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .btn-danger:hover {
+    box-shadow: 0 4px 16px rgba(244,67,54,0.3);
+    transform: translateY(-1px);
+  }
+  .btn-cancel {
+    background: transparent;
+    border: 1px solid rgba(212,175,55,0.35);
+    color: #d4af37;
+    padding: 10px 26px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 2px;
+    transition: all 0.25s;
+    white-space: nowrap;
+  }
+  .btn-cancel:hover {
+    background: rgba(212,175,55,0.08);
+    border-color: rgba(212,175,55,0.6);
+    color: #f0d77a;
+    box-shadow: 0 0 16px rgba(212,175,55,0.1);
+  }
+
+  /* ===== 商户管理页面 ===== */
+  .merchant-page {
+    display: none;
+  }
+  .merchant-page.show {
+    display: block;
+  }
+  /* 商户管理 - 双栏布局（桌面/平板均匀分布） */
+  .merchant-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    align-items: start;
+    justify-content: center;
+    margin-top: 24px;
+    max-width: 1000px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0 16px;
+  }
+
+  /* 左侧：信息卡片列 */
+  .merchant-left {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .sec-card {
+    background: linear-gradient(145deg, rgba(20,18,10,0.98), rgba(26,24,14,0.98));
+    border: 1px solid rgba(212,175,55,0.15); border-radius: 14px;
+    padding: 24px 28px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5), 0 0 20px rgba(212,175,55,0.03);
+  }
+  .sec-card-title {
+    font-size: 15px; font-weight: 700; color: #f0d77a;
+    letter-spacing: 2px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;
+  }
+  .sec-card-title::before { content: ''; width: 3px; height: 16px; background: linear-gradient(180deg,#f0d77a,#d4af37); border-radius: 2px; }
+  .sec-card-desc { font-size: 12px; color: rgba(212,175,55,0.4); margin-bottom: 18px; letter-spacing: 1px; }
+  .sec-field { margin-bottom: 14px; }
+  .sec-label { display: block; font-size: 13px; color: rgba(212,175,55,0.65); margin-bottom: 5px; letter-spacing: 1px; font-weight: 600; }
+  .sec-input {
+    width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(212,175,55,0.2);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #e0d8c8;
+    outline: none; font-family: inherit; font-weight: 700; transition: all 0.25s;
+  }
+  .sec-input:focus { border-color: #d4af37; box-shadow: 0 0 0 2px rgba(212,175,55,0.1); }
+  .sec-input::placeholder { color: rgba(212,175,55,0.25); font-weight: 400; }
+  .sec-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* 密码输入框小眼睛 */
+  .pwd-input-wrap { position: relative; }
+  .pwd-input-wrap .sec-input,
+  .pwd-input-wrap .modal-input { padding-right: 40px; }
+  .pwd-eye {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    color: rgba(212,175,55,0.4);
+    user-select: none;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .pwd-eye:hover { color: #d4af37; }
+  .pwd-eye svg { width: 100%; height: 100%; }
+
+  /* 商户信息字段行 */
+  .info-row { display: flex; gap: 12px; margin-bottom: 14px; }
+  .info-row .sec-field { flex: 1; min-width: 0; }
+  .info-row-single { margin-bottom: 18px; }
+  /* 最后一个字段不加底部间距 */
+  .info-row-single:last-child { margin-bottom: 0; }
+
+  /* 开关样式 */
+  .switch-wrap { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; }
+  .switch-info h4 { font-size: 13px; color: #e0d8c8; margin: 0 0 3px; font-weight: 700; }
+  .switch-info p { font-size: 11px; color: rgba(212,175,55,0.45); margin: 0; letter-spacing: 0.5px; line-height: 1.5; }
+  .switch-track {
+    position: relative; width: 46px; height: 24px; background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(212,175,55,0.2); border-radius: 12px;
+    cursor: pointer; transition: all 0.3s; flex-shrink: 0;
+  }
+  .switch-track.on { background: linear-gradient(135deg, #c99c2c, #d4af37); border-color: transparent; }
+  .switch-thumb {
+    position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+    background: #fff; border-radius: 50%; transition: transform 0.3s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  .switch-track.on .switch-thumb { transform: translateX(20px); }
+  .sec-row { display: flex; gap: 10px; align-items: flex-end; }
+  .sec-row .sec-field { flex: 1; }
+
+  /* 右侧：收款二维码预览 */
+  .merchant-qr-panel {
+    background: linear-gradient(160deg, rgba(18,15,8,0.98), rgba(22,19,10,0.98));
+    border: 1px solid rgba(212,175,55,0.18);
+    border-radius: 16px;
+    padding: 24px 24px;
+    text-align: center;
+    box-shadow:
+      0 20px 60px rgba(0,0,0,0.6),
+      0 0 40px rgba(212,175,55,0.05),
+      inset 0 1px 0 rgba(212,175,55,0.06),
+      inset 0 -1px 0 rgba(0,0,0,0.3);
+    overflow: hidden;
+  }
+  .merchant-qr-panel::before {
+    content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 2px; background: linear-gradient(90deg, transparent, #d4af37, transparent);
+  }
+  .qr-brand-logo {
+    width: 60px; height: 60px; margin: 0 auto 12px;
+    border-radius: 16px;
+    border: 2px solid rgba(212,175,55,0.35);
+    box-shadow: 0 4px 20px rgba(212,175,55,0.15), 0 0 30px rgba(212,175,55,0.08);
+    object-fit: cover;
+    display: block;
+    position: relative;
+  }
+  .qr-brand-name {
+    font-size: 20px; font-weight: 800; color: #f0d77a;
+    letter-spacing: 4px; margin: 0 0 3px;
+    text-shadow: 0 0 20px rgba(212,175,55,0.3);
+  }
+  .qr-brand-slogan {
+    font-size: 11px; color: rgba(212,175,55,0.5);
+    letter-spacing: 3px; margin: 0 0 12px;
+  }
+  .qr-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: rgba(212,175,55,0.7);
+    border: 1px solid rgba(212,175,55,0.2);
+    padding: 4px 12px; border-radius: 20px;
+    margin-bottom: 14px; letter-spacing: 1px;
+    background: rgba(212,175,55,0.03);
+  }
+  .qr-section-title {
+    font-size: 14px; font-weight: 700; color: #d4af37;
+    letter-spacing: 3px; margin: 14px 0 12px;
+  }
+  .qr-code-box {
+    background: #fff; border-radius: 12px;
+    padding: 14px; display: inline-block;
+    border: 2px solid rgba(212,175,55,0.3);
+    box-shadow: 0 4px 30px rgba(0,0,0,0.4), 0 0 15px rgba(212,175,55,0.08);
+  }
+  .qr-code-box canvas,
+  .qr-code-box img { display: block; }
+  /* 二维码中心 Logo 叠加 */
+  .qr-logo-overlay {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 5;
+  }
+  .qr-logo-inner {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 0 0 1.5px rgba(212,175,55,0.4);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .qr-logo-inner img {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+  }
+  .qr-hint-text {
+    font-size: 12px; color: rgba(212,175,55,0.5);
+    margin-top: 14px; letter-spacing: 1.5px;
+  }
+  .qr-footer-hint {
+    font-size: 11px; color: rgba(212,175,55,0.35);
+    margin-top: 16px; letter-spacing: 0.8px;
+    line-height: 1.7;
+    cursor: pointer; transition: color 0.25s;
+    padding: 6px 12px; border-radius: 8px;
+    border: 1px solid transparent;
+  }
+  .qr-footer-hint:hover {
+    color: rgba(212,175,55,0.7);
+    background: rgba(212,175,55,0.05);
+    border-color: rgba(212,175,55,0.15);
+  }
+
+  /* ===== 修改密码弹窗（右上角商户名点击） ===== */
+  .change-pwd-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 9998; align-items: center; justify-content: center;
+  }
+  .change-pwd-overlay.show { display: flex; }
+  .change-pwd-backdrop {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .change-pwd-dialog {
+    position: relative; z-index: 1;
+    width: 420px; max-width: 92vw;
+    background: linear-gradient(160deg, rgba(14,12,7,0.99), rgba(20,17,10,0.99));
+    border: 1px solid rgba(212,175,55,0.2); border-radius: 16px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.8), 0 0 40px rgba(212,175,55,0.06);
+    padding: 28px 24px;
+    animation: slideUpFade 0.25s ease;
+  }
+
+  /* ===== 忘记密码弹窗 ===== */
+  .forgot-pwd-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 9998; align-items: center; justify-content: center;
+  }
+  .forgot-pwd-overlay.show { display: flex; }
+  .forgot-pwd-backdrop {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .forgot-pwd-dialog {
+    position: relative; z-index: 1;
+    width: 420px; max-width: 92vw;
+    background: linear-gradient(160deg, rgba(14,12,7,0.99), rgba(20,17,10,0.99));
+    border: 1px solid rgba(212,175,55,0.2); border-radius: 16px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.8), 0 0 40px rgba(212,175,55,0.06);
+    padding: 28px 24px;
+    animation: slideUpFade 0.25s ease;
+  }
+
+  /* ===== 安全设置独立overlay（点右上角商户名打开） ===== */
+  .security-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 9998; align-items: center; justify-content: center;
+  }
+  .security-overlay.show { display: flex; }
+  .security-overlay-backdrop {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .security-overlay-panel {
+    position: relative; z-index: 1;
+    width: 520px; max-width: 92vw; max-height: 85vh;
+    background: linear-gradient(160deg, rgba(14,12,7,0.99), rgba(20,17,10,0.99));
+    border: 1px solid rgba(212,175,55,0.2); border-radius: 16px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.8), 0 0 40px rgba(212,175,55,0.06);
+    overflow-y: auto;
+    animation: slideUpFade 0.25s ease;
+  }
+  /* 黑金主题滚动条 */
+  .security-overlay-panel::-webkit-scrollbar { width: 6px; }
+  .security-overlay-panel::-webkit-scrollbar-track {
+    background: rgba(10,8,5,0.9);
+    border-radius: 3px;
+  }
+  .security-overlay-panel::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #b8860b, #d4af37);
+    border-radius: 3px;
+    border: none;
+  }
+  .security-overlay-panel::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #d4af37, #f0d77a);
+  }
+  @keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .security-overlay-header {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 24px; border-bottom: 1px solid rgba(212,175,55,0.12);
+    background: linear-gradient(180deg, rgba(20,18,10,0.98), rgba(20,18,10,0.95));
+  }
+  .security-overlay-title {
+    font-size: 16px; font-weight: 700; color: #f0d77a; letter-spacing: 2px;
+  }
+  .security-close-btn {
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 1px solid rgba(212,175,55,0.2); background: none;
+    color: rgba(200,190,165,0.6); font-size: 15px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .security-close-btn:hover {
+    color: #f0d77a; border-color: rgba(212,175,55,0.4);
+    background: rgba(212,175,55,0.08);
+  }
+  .security-overlay-body {
+    padding: 20px 24px 28px;
+  }
+
+  /* 安全密码验证弹窗 */
+  .pwd-verify-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.75); z-index: 10000;
+    align-items: center; justify-content: center; backdrop-filter: blur(4px);
+  }
+  .pwd-verify-overlay.show { display: flex; }
+  .pwd-verify-dialog {
+    background: linear-gradient(145deg, rgba(20,18,10,0.98), rgba(26,24,14,0.98));
+    border: 1px solid rgba(212,175,55,0.35); border-radius: 14px;
+    padding: 28px 32px; min-width: 400px; max-width: 480px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.75), 0 0 30px rgba(212,175,55,0.08);
+    animation: modalIn 0.2s ease; position: relative;
+  }
+  .pwd-verify-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 16px; font-size: 12px;
+  }
+  .forgot-pwd-link {
+    color: rgba(212,175,55,0.5); text-decoration: underline;
+    cursor: pointer; font-size: 12px; transition: color 0.2s;
+  }
+  .forgot-pwd-link:hover { color: #f0d77a; }
+  .attempt-info { color: rgba(255,152,0,0.85); font-weight: 600; }
+
+  /* 忘记密码重置弹窗 */
+  .reset-pwd-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.75); z-index: 10001;
+    align-items: center; justify-content: center; backdrop-filter: blur(4px);
+  }
+  .reset-pwd-overlay.show { display: flex; }
+
+  /* ===== 分页 ===== */
+  .pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-top: 1px solid rgba(212,175,55,0.08);
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .page-info {
+    font-size: 12px;
+    color: rgba(212,175,55,0.45);
+  }
+  .page-info span { color: #d4af37; font-weight: 600; }
+  .page-btns {
+    display: flex;
+    gap: 6px;
+  }
+  .page-btns button {
+    padding: 6px 11px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+  .page-btn-num {
+    background: transparent;
+    border: 1px solid rgba(212,175,55,0.15);
+    color: rgba(200,190,165,0.6);
+    min-width: 32px;
+    text-align: center;
+  }
+  .page-btn-num:hover {
+    border-color: rgba(212,175,55,0.4);
+    color: #d4af37;
+  }
+  .page-btn-num.active {
+    background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(180,140,30,0.1));
+    border-color: #d4af37;
+    color: #f0d77a;
+    font-weight: 700;
+  }
+  .page-btn-nav {
+    background: transparent;
+    border: 1px solid rgba(212,175,55,0.12);
+    color: rgba(200,190,165,0.5);
+  }
+  .page-btn-nav:hover:not(:disabled) {
+    border-color: rgba(212,175,55,0.4);
+    color: #d4af37;
+  }
+  .page-btn-nav:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* ===== 响应式 ===== */
+  @media (max-width: 768px) {
+    .topnav {
+      padding: 0 12px;
+      height: 50px;
+    }
+    .topnav-nav {
+      display: none;
+    }
+    .topnav-logo { font-size: 16px; letter-spacing: 2px; }
+    .topnav-sub { font-size: 11px; }
+    .main-wrap { padding: 10px; }
+    .filter-section { padding: 14px 14px 6px; }
+    .filter-row { gap: 8px; }
+    .filter-input { width: 100%; max-width: 200px; }
+    .filter-select { max-width: 200px; }
+    .btn { padding: 7px 14px; font-size: 11px; }
+    .table-header-bar { padding: 10px 14px; }
+    .table-title { font-size: 13px; }
+    table { font-size: 11px; min-width: auto; }
+    table thead th,
+    table tbody td { padding: 8px 8px; font-size: 11px; }
+    .pagination-bar { padding: 10px 14px; }
+    /* 商户管理响应式 */
+    .merchant-layout { grid-template-columns: 1fr; gap: 20px; padding: 0; }
+    .merchant-qr-panel { margin-top: 10px; }
+    .info-row { flex-direction: column; gap: 0; }
+  }
+
+  @media (max-width: 480px) {
+    .breadcrumb { padding: 10px 0 14px; font-size: 11px; }
+    .content-card { border-radius: 10px; }
+    .filter-item { flex-direction: column; align-items: flex-start; width: 100%; }
+    .filter-input, .filter-select { width: 100%; }
+    .sec-card { padding: 18px 20px; }
+    .qr-brand-logo { width: 56px; height: 56px; border-radius: 14px; }
+    .qr-brand-name { font-size: 18px; }
+    .merchant-qr-panel { padding: 24px 18px; }
+  }
+
+
+  /* ===== 限额数字输入框（黑金流光增减按钮） ===== */
+  .number-field-wrap {
+    display: flex;
+    align-items: stretch;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(212,175,55,0.2);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  .number-field-wrap:focus-within {
+    border-color: #d4af37;
+    box-shadow: 0 0 0 2px rgba(212,175,55,0.1);
+  }
+  .number-field-wrap input[type="number"] {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 10px 8px;
+    font-size: 13px;
+    color: #e0d8c8;
+    outline: none;
+    font-family: inherit;
+    font-weight: 700;
+    width: 0;
+    -moz-appearance: textfield;
+  }
+  .number-field-wrap input[type="number"]::-webkit-outer-spin-button,
+  .number-field-wrap input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .number-field-wrap input[type="number"]::placeholder { color: rgba(212,175,55,0.25); font-weight: 400; }
+  .num-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, rgba(212,175,55,0.12), rgba(180,140,30,0.06));
+    color: #d4af37;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    font-family: inherit;
+    transition: all 0.18s;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .num-btn:hover {
+    background: linear-gradient(135deg, rgba(212,175,55,0.28), rgba(180,140,30,0.18));
+    color: #f0d77a;
+  }
+  .num-btn:active {
+    background: linear-gradient(135deg, #c99c2c, #d4af37);
+    color: #0a0a0a;
+  }
+  .num-btn-minus { border-right: 1px solid rgba(212,175,55,0.15); }
+  .num-btn-plus  { border-left:  1px solid rgba(212,175,55,0.15); }
+
+  /* 键盘 Tab 焦点环 */
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 1px solid rgba(212,175,55,0.4);
+    outline-offset: 2px;
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- 顶部导航栏 -->
+<nav class="topnav">
+  <div class="topnav-left">
+    <img class="topnav-logo" src="logo-pay.png" alt="黑金PAY">
+    <span class="topnav-divider"></span>
+    <span class="topnav-sub">商户后台</span>
+  </div>
+  <div class="topnav-nav">
+    <a href="#" onclick="switchPage('home')" id="navHome" class="active">主页</a>
+    <a href="#" onclick="switchPage('manage')" id="navManage">商户管理</a>
+    <a href="#" onclick="switchPage('orders')" id="navOrders">订单中心</a>
+    <a href="#" onclick="switchPage('limits')" id="navLimits">限额设置</a>
+    <a href="#" onclick="switchPage('security')" id="navSecurity">安全设置</a>
+  </div>
+  <div class="topnav-right">
+    <button class="topnav-logout" onclick="logout()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+      退出登录
+    </button>
+    <div class="topnav-user" onclick="openChangePwdModal()">
+      <div class="topnav-avatar" id="topNavAvatar"></div>
+      <span id="topNavMerchantName">加载中...</span>
+    </div>
+  </div>
+</nav>
+
+<!-- 主内容区：黑金仪表盘 -->
+<div class="main-wrap" id="mainPage">
+
+  <!-- 仪表盘卡片 -->
+  <div class="dash-cards">
+    <div class="dash-card">
+      <div class="dash-card-icon">💰</div>
+      <div class="dash-card-body">
+        <div class="dash-card-label">今日交易额</div>
+        <div class="dash-card-value" id="dashTodayAmount">¥0</div>
+        <div class="dash-card-sub">实时统计</div>
+      </div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-card-icon">📊</div>
+      <div class="dash-card-body">
+        <div class="dash-card-label">今日交易笔数</div>
+        <div class="dash-card-value" id="dashTodayCount">0</div>
+        <div class="dash-card-sub">笔</div>
+      </div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-card-icon">📈</div>
+      <div class="dash-card-body">
+        <div class="dash-card-label">笔均金额</div>
+        <div class="dash-card-value" id="dashAvgAmount">¥0</div>
+        <div class="dash-card-sub">本月至今</div>
+      </div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-card-icon">✅</div>
+      <div class="dash-card-body">
+        <div class="dash-card-label">成功率</div>
+        <div class="dash-card-value" id="dashSuccessRate">--</div>
+        <div class="dash-card-sub">支付成功 / 总笔数</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图表 + 订单列表 双栏 -->
+  <div class="dash-row">
+    <!-- 左：交易趋势图 -->
+    <div class="dash-chart-card">
+      <div class="dash-chart-title" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>近7日交易趋势</span>
+        <div class="trend-range-selector">
+          <div class="trend-range-btn" id="trendRangeBtn" onclick="toggleTrendRangeMenu()">
+            <span id="trendRangeLabel">最近七天</span>
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="trend-range-menu" id="trendRangeMenu">
+            <div class="trend-range-item active" data-range="7" onclick="selectTrendRange(7, this)">最近七天</div>
+            <div class="trend-range-item" data-range="30" onclick="selectTrendRange(30, this)">最近三十天</div>
+            <div class="trend-range-item" data-range="month" onclick="selectTrendRange('month', this)">本月</div>
+            <div class="trend-range-item" data-range="lastMonth" onclick="selectTrendRange('lastMonth', this)">上月</div>
+            <div class="trend-range-item" data-range="custom" onclick="openTrendDatePicker()">自定义</div>
+          </div>
+        </div>
+      </div>
+      <div class="dash-chart-wrap">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+
+    <!-- 右：数据大盘 -->
+    <div class="dash-overview-card">
+      <div class="dash-chart-title">数据大盘</div>
+      <div class="dash-overview-items">
+        <div class="dash-overview-item">
+          <span class="ov-label">本月累计交易额</span>
+          <span class="ov-value" id="dashMonthAmount">¥0</span>
+        </div>
+        <div class="dash-overview-item">
+          <span class="ov-label">本月交易笔数</span>
+          <span class="ov-value" id="dashMonthCount">0 笔</span>
+        </div>
+        <div class="dash-overview-item">
+          <span class="ov-label">本月退款笔数</span>
+          <span class="ov-value" id="dashMonthRefunds">0 笔</span>
+        </div>
+        <div class="dash-overview-item">
+          <span class="ov-label">本月退款金额</span>
+          <span class="ov-value" id="dashMonthRefundAmount">¥0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 最近订单（精简表格） -->
+  <div class="content-card" style="margin-top: 16px;">
+    <div class="table-section">
+      <div class="table-header-bar">
+        <div class="table-title">最近订单</div>
+        <a href="#" class="view-all-link" onclick="switchPage('orders');return false;">查看全部订单 →</a>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>订单号</th>
+              <th>支付金额</th>
+              <th>支付方式</th>
+              <th>支付状态</th>
+              <th>创建日期</th>
+            </tr>
+          </thead>
+          <tbody id="dashTableBody">
+            <tr><td colspan="5" style="text-align:center;padding:40px;color:rgba(212,175,55,0.3)">暂无订单数据</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main-wrap -->
+
+<!-- 订单中心页面 -->
+<div class="main-wrap" id="ordersPage" style="display:none;">
+  <div class="content-card">
+    <div class="filter-section">
+      <div class="filter-row">
+        <div class="filter-item">
+          <span class="filter-label">开始日期</span>
+          <div class="date-input-wrap" id="startDateWrap">
+            <input type="text" class="filter-input" id="startDateInput" placeholder="选择开始日期" readonly onclick="openDatePicker('start')">
+            <span class="cal-icon" onclick="openDatePicker('start')">📅</span>
+          </div>
+        </div>
+        <div class="filter-item">
+          <span class="filter-label">结束日期</span>
+          <div class="date-input-wrap" id="endDateWrap">
+            <input type="text" class="filter-input" id="endDateInput" placeholder="选择结束日期" readonly onclick="openDatePicker('end')">
+            <span class="cal-icon" onclick="openDatePicker('end')">📅</span>
+          </div>
+        </div>
+        <div class="filter-item">
+          <span class="filter-label">订单号</span>
+          <input type="text" class="filter-input" id="orderSearch" placeholder="请输入订单号">
+        </div>
+        <div class="filter-item">
+          <span class="filter-label">支付状态</span>
+          <select class="filter-select" id="statusFilter" onchange="applyFilters()">
+            <option value="">全部</option>
+            <option value="generated">订单生成</option>
+            <option value="paying">支付中</option>
+            <option value="paid">支付成功</option>
+            <option value="refunded">已退款</option>
+            <option value="partial_refund">部分退款</option>
+          </select>
+        </div>
+        <div class="filter-item" style="gap:4px">
+          <button class="btn btn-primary" onclick="applyFilters()">🔍 搜索</button>
+          <button class="btn btn-outline" onclick="resetFilters()">🔄 重置</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-section">
+      <div class="table-header-bar">
+        <div class="table-title">订单列表</div>
+        <div class="table-info">
+          共 <span id="orderCount">0</span> 条记录 &nbsp;|&nbsp; 筛选交易额 <span id="todayAmount">¥0.00</span>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>订单号</th>
+              <th>支付金额</th>
+              <th>支付方式</th>
+              <th>支付状态</th>
+              <th>创建日期</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="ordersTableBody">
+            <tr><td colspan="6" style="text-align:center;padding:40px;color:rgba(212,175,55,0.3)">暂无订单数据</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="pagination-bar">
+      <div class="page-info" id="pageInfo">
+        显示第 <span id="pageRange">0-0</span> 条，共 <span id="totalCount">0</span> 条记录
+      </div>
+      <div class="page-btns" id="pageBtns"></div>
+    </div>
+  </div>
+</div><!-- /ordersPage -->
+
+<!-- 安全设置页面（顶部菜单入口） -->
+<div class="main-wrap" id="securitySetPage" style="display:none;">
+  <div style="height:12px;"></div>
+
+  <div class="content-card" style="max-width:620px; margin:0 auto;">
+    <div style="padding:28px 32px;">
+
+      <!-- 修改登录密码 -->
+      <div class="sec-card" style="margin-bottom:20px; background:rgba(20,18,10,0.6); border:1px solid rgba(212,175,55,0.15); border-radius:12px; padding:20px;">
+        <div class="sec-card-title" style="color:#f0d77a; margin-bottom:8px;">修改登录密码</div>
+        <div class="sec-card-desc" style="font-size:12px; color:rgba(200,190,165,0.5); margin-bottom:16px;">定期修改密码可以提高账户安全性</div>
+        <div class="sec-field" style="margin-bottom:12px">
+          <label class="sec-label">原密码</label>
+          <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secSetOldPwd" placeholder="请输入原密码"><span class="pwd-eye" onclick="togglePwdVisibility('secSetOldPwd', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+        </div>
+        <div class="sec-field" style="margin-bottom:12px">
+          <label class="sec-label">新密码</label>
+          <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secSetNewPwd1" placeholder="请输入新密码（至少6位）"><span class="pwd-eye" onclick="togglePwdVisibility('secSetNewPwd1', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+        </div>
+        <div class="sec-field" style="margin-bottom:16px">
+          <label class="sec-label">确认新密码</label>
+          <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secSetNewPwd2" placeholder="再次输入新密码"><span class="pwd-eye" onclick="togglePwdVisibility('secSetNewPwd2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+        </div>
+        <button class="btn btn-primary" style="width:100%; padding:11px;" onclick="submitChangePwdFromPage()">修改登录密码</button>
+      </div>
+
+      <!-- 二级安全密码 -->
+      <div class="sec-card" style="background:rgba(20,18,10,0.6); border:1px solid rgba(212,175,55,0.15); border-radius:12px; padding:20px;">
+        <div class="sec-card-title" style="color:#f0d77a; margin-bottom:8px;">二级安全密码</div>
+        <div class="sec-card-desc" style="font-size:12px; color:rgba(200,190,165,0.5); margin-bottom:16px;">用于退款验证，请妥善保管</div>
+
+        <div id="secPwdSetArea2">
+          <div id="secPwdNewForm2">
+            <div class="sec-field" style="margin-bottom:12px">
+              <label class="sec-label">设置安全密码</label>
+              <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secNewPassword1_2" placeholder="请输入安全密码（至少4位）"><span class="pwd-eye" onclick="togglePwdVisibility('secNewPassword1_2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+            </div>
+            <div class="sec-field" style="margin-bottom:16px">
+              <label class="sec-label">确认安全密码</label>
+              <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secNewPassword2_2" placeholder="再次输入安全密码"><span class="pwd-eye" onclick="togglePwdVisibility('secNewPassword2_2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+            </div>
+            <button class="btn btn-primary" style="width:100%; padding:11px;" onclick="setSecurityPassword2()">设置安全密码</button>
+          </div>
+          <div id="secPwdChangeForm2" style="display:none">
+            <div class="sec-field" style="margin-bottom:12px">
+              <label class="sec-label">原密码</label>
+              <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secOldPassword_2" placeholder="输入原密码"><span class="pwd-eye" onclick="togglePwdVisibility('secOldPassword_2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+            </div>
+            <div class="sec-field" style="margin-bottom:12px">
+              <label class="sec-label">新密码</label>
+              <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secChgNewPwd1_2" placeholder="输入新密码"><span class="pwd-eye" onclick="togglePwdVisibility('secChgNewPwd1_2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+            </div>
+            <div class="sec-field" style="margin-bottom:16px">
+              <label class="sec-label">确认新密码</label>
+              <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secChgNewPwd2_2" placeholder="再次输入新密码"><span class="pwd-eye" onclick="togglePwdVisibility('secChgNewPwd2_2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+            </div>
+            <button class="btn btn-primary" style="width:100%; padding:11px;" onclick="changeSecurityPassword2()">修改安全密码</button>
+          </div>
+        </div>
+
+        <div id="secPwdStatus2" style="margin-top:14px; font-size:12px; color:rgba(76,175,80,0.8); display:none;">✅ 二级安全密码已设置</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 限额设置页面 -->
+<div class="main-wrap" id="limitsPage" style="display:none;">
+  <div class="page-header">
+  </div>
+
+  <div class="sec-card" style="max-width:620px; margin:0 auto; padding:28px 32px;">
+    <div class="sec-card-title">交易限额配置</div>
+    <div class="sec-card-desc">设置单笔/单日/单月的金额和笔数上限，留空表示不限制</div>
+
+    <!-- 单笔限额 -->
+    <div class="info-row">
+      <div class="sec-field">
+        <label class="sec-label">单笔最低金额（元）</label>
+        <div class="number-field-wrap"><button class="num-btn num-btn-minus" type="button" data-target="limitMinAmount" data-delta="-0.01" data-is-amount="true">−</button><input type="number" id="limitMinAmount" placeholder="不限制" step="0.01" min="0"><button class="num-btn num-btn-plus" type="button" data-target="limitMinAmount" data-delta="0.01" data-is-amount="true">+</button></div>
+      </div>
+      <div class="sec-field">
+        <label class="sec-label">单笔最高金额（元）</label>
+        <div class="number-field-wrap"><button class="num-btn num-btn-minus" type="button" data-target="limitMaxAmount" data-delta="-0.01" data-is-amount="true">−</button><input type="number" id="limitMaxAmount" placeholder="不限制" step="0.01" min="0"><button class="num-btn num-btn-plus" type="button" data-target="limitMaxAmount" data-delta="0.01" data-is-amount="true">+</button></div>
+      </div>
+    </div>
+
+    <!-- 分隔线 -->
+    <div style="height:1px; background:linear-gradient(90deg,transparent,rgba(212,175,55,0.2),transparent); margin:20px 0;"></div>
+
+    <!-- 单日限制 -->
+    <div class="info-row">
+      <div class="sec-field">
+        <label class="sec-label">单日最大笔数</label>
+        <div class="number-field-wrap"><button class="num-btn num-btn-minus" type="button" data-target="limitDayCount" data-delta="-1" data-is-amount="false">−</button><input type="number" id="limitDayCount" placeholder="不限制" step="1" min="0"><button class="num-btn num-btn-plus" type="button" data-target="limitDayCount" data-delta="1" data-is-amount="false">+</button></div>
+      </div>
+      <div class="sec-field">
+        <label class="sec-label">单日最大金额（元）</label>
+        <div class="number-field-wrap"><button class="num-btn num-btn-minus" type="button" data-target="limitDayAmount" data-delta="-0.01" data-is-amount="true">−</button><input type="number" id="limitDayAmount" placeholder="不限制" step="0.01" min="0"><button class="num-btn num-btn-plus" type="button" data-target="limitDayAmount" data-delta="0.01" data-is-amount="true">+</button></div>
+      </div>
+    </div>
+
+    <!-- 单月限制 -->
+    <div class="info-row">
+      <div class="sec-field">
+        <label class="sec-label">当月最大笔数</label>
+        <div class="number-field-wrap"><button class="num-btn num-btn-minus" type="button" data-target="limitMonthCount" data-delta="-1" data-is-amount="false">−</button><input type="number" id="limitMonthCount" placeholder="不限制" step="1" min="0"><button class="num-btn num-btn-plus" type="button" data-target="limitMonthCount" data-delta="1" data-is-amount="false">+</button></div>
+      </div>
+      <div class="sec-field">
+        <label class="sec-label">当月最大金额（元）</label>
+        <div class="number-field-wrap"><button class="num-btn num-btn-minus" type="button" data-target="limitMonthAmount" data-delta="-0.01" data-is-amount="true">−</button><input type="number" id="limitMonthAmount" placeholder="不限制" step="0.01" min="0"><button class="num-btn num-btn-plus" type="button" data-target="limitMonthAmount" data-delta="0.01" data-is-amount="true">+</button></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-top:24px;">
+      <button class="btn btn-primary" id="saveLimitsBtn" onclick="saveLimitsConfig()" style="flex:1;padding:13px;font-size:14px;letter-spacing:3px;">提交保存</button>
+      <button class="btn btn-outline" onclick="openLimitsResetConfirm()" style="flex:1;padding:13px;font-size:14px;letter-spacing:3px;">重 置</button>
+    </div>
+  </div>
+</div><!-- /limitsPage -->
+
+<!-- 限额重置确认弹窗 -->
+<div class="modal-overlay" id="limitsResetOverlay">
+  <div class="modal-dialog" style="text-align:center;min-width:360px;max-width:420px;">
+    <div style="font-size:40px;margin-bottom:14px;">⚠️</div>
+    <div style="font-size:17px;font-weight:700;color:#f0d77a;letter-spacing:2px;margin-bottom:10px;">确认重置限额？</div>
+    <div style="font-size:13px;color:rgba(200,190,165,0.7);margin-bottom:24px;line-height:1.8;">重置后所有限额将清空，收银台将不再限制金额和笔数</div>
+    <div class="modal-btns" style="justify-content:center;gap:14px;">
+      <button class="btn-cancel" onclick="closeLimitsResetConfirm()" style="min-width:90px;">取 消</button>
+      <button class="btn-primary" onclick="confirmLimitsReset()" style="padding:10px 32px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:none;letter-spacing:2px;background:linear-gradient(135deg,#c99c2c,#d4af37);color:#0a0a0a;">确认重置</button>
+    </div>
+  </div>
+</div>
+
+<!-- 日历日期选择器弹出层 -->
+<div class="date-picker-popup" id="datePickerPopup">
+  <div style="width:100%">
+    <!-- 日期范围头部显示 -->
+    <div class="cal-range-header" id="calRangeHeader">
+      <span class="cal-range-start" id="calHeaderStart">开始日期</span>
+      <span class="cal-range-sep">~</span>
+      <span class="cal-range-end" id="calHeaderEnd">结束日期</span>
+    </div>
+    <!-- 双月日历主体 -->
+    <div style="display:flex;gap:24px">
+      <div class="cal-month" id="calMonthLeft"></div>
+      <div class="cal-month" id="calMonthRight"></div>
+    </div>
+    <!-- 底部按钮栏 -->
+    <div class="cal-footer" id="calFooter" style="display:none">
+      <button type="button" class="cal-btn-cancel" onclick="event.stopPropagation(); closeDatePicker()">取消</button>
+      <button type="button" class="cal-btn-confirm" onclick="event.stopPropagation(); calConfirmDate()">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 退款确认弹窗 -->
+<div class="modal-overlay" id="refundModalOverlay">
+  <div class="modal-dialog">
+    <div class="modal-title">确认退款</div>
+    <div class="modal-info">
+      <div>订单号：<span id="refundOrderNo">--</span></div>
+      <div>原支付金额：<span id="refundOrigAmount">--</span></div>
+    </div>
+    <label class="modal-label">退款金额（元）</label>
+    <input type="number" class="modal-input" id="refundAmountInput" step="0.01" min="0.01" placeholder="请输入退款金额">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeRefundModal()">取消</button>
+      <button class="btn-danger" onclick="confirmRefund()">确认退款</button>
+    </div>
+  </div>
+</div>
+
+<!-- 通用黑金提示弹窗（替代所有alert） -->
+<div class="modal-overlay" id="alertOverlay">
+  <div class="modal-dialog" style="text-align:center; min-width:320px; max-width:400px;">
+    <div id="alertIcon" style="font-size:42px; margin-bottom:12px;">⚠️</div>
+    <div id="alertMessage" style="font-size:16px; font-weight:700; color:#e0d8c8; letter-spacing:1px; margin-bottom:24px; line-height:1.6;"></div>
+    <div class="modal-btns" style="justify-content:center;">
+      <button class="btn-primary" style="padding:10px 40px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:none;letter-spacing:2px;" onclick="closeAlertDialog()">确 定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 通用黑金输入弹窗（替代所有prompt） -->
+<div class="modal-overlay" id="promptOverlay">
+  <div class="modal-dialog" style="min-width:360px; max-width:420px;">
+    <div id="promptIcon" style="font-size:36px; text-align:center; margin-bottom:10px;">🔐</div>
+    <div id="promptMessage" style="font-size:15px; color:#d4af37; letter-spacing:1px; margin-bottom:14px; text-align:center; font-weight:700;"></div>
+    <div class="pwd-input-wrap"><input type="password" id="promptInput" autocomplete="off"
+      style="width:100%; padding:12px 16px; border-radius:8px; background:rgba(255,255,255,0.06); border:1px solid rgba(212,175,55,0.3); color:#e0d8c8; font-size:15px; outline:none; box-sizing:border-box;"
+      onkeydown="if(event.key==='Enter'){document.getElementById('promptOkBtn').click();}" /><span class="pwd-eye" onclick="togglePwdVisibility('promptInput', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+    <div class="modal-btns" style="margin-top:18px;">
+      <button class="btn-cancel" onclick="closePromptDialog(false)">取 消</button>
+      <button id="promptOkBtn" class="btn-danger" onclick="closePromptDialog(true)" style="min-width:80px;">确 定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 退款成功弹窗 v2 -->
+<div class="modal-overlay" id="refundSuccessOverlay">
+  <div class="modal-dialog" style="text-align:center; min-width:340px; max-width:380px;">
+    <div style="font-size:48px; margin-bottom:12px;">✅</div>
+    <div style="font-size:20px; font-weight:700; color:#d4af37; letter-spacing:2px; margin-bottom:24px;">退款成功</div>
+    <div class="modal-btns" style="justify-content:center;">
+      <button class="btn-primary" style="padding:10px 40px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:none;letter-spacing:2px;" onclick="closeRefundSuccess()">确 定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 商户管理页面 ==================== -->
+<div class="merchant-page" id="securityPage">
+
+  <!-- 双栏布局 -->
+  <div class="merchant-layout">
+
+    <!-- 左侧：信息与配置 -->
+    <div class="merchant-left">
+
+      <!-- 商户基本信息 -->
+      <div class="sec-card">
+        <div class="sec-card-title">商户基本信息</div>
+        <div class="sec-card-desc">当前商户的基本信息</div>
+        <div class="info-row-single">
+          <label class="sec-label">商户名称</label>
+          <input type="text" class="sec-input" id="merchantNameInput" value="" placeholder="支付宝商户名">
+        </div>
+        <div class="info-row-single">
+          <label class="sec-label">商户类型</label>
+          <input type="text" class="sec-input" value="特约商户" disabled style="opacity:0.6;">
+        </div>
+        <div class="info-row-single">
+          <label class="sec-label">联系人姓名</label>
+          <input type="text" class="sec-input" id="merchantContactInput" value="" placeholder="支付宝商户名">
+        </div>
+        <div class="info-row-single">
+          <label class="sec-label">联系人手机号</label>
+          <input type="text" class="sec-input" id="merchantPhoneInput" value="" placeholder="--">
+        </div>
+      </div>
+
+    </div><!-- /merchant-left -->
+
+    <!-- 右侧：收款二维码预览 -->
+    <div class="merchant-qr-panel">
+      <img class="qr-brand-logo" src="logo-pay.png" alt="黑金PAY">
+      <div class="qr-brand-name">黑金PAY</div>
+      <div class="qr-brand-slogan">安全收款 · 即时到账</div>
+
+      <div class="qr-badge">
+        🔒 支付宝实时交易
+      </div>
+
+      <div class="qr-section-title">收款二维码</div>
+      <div class="qr-code-box" id="merchantQrCodeBox"></div>
+      <div class="qr-hint-text">使用支付宝扫一扫完成支付</div>
+      <div class="qr-footer-hint" onclick="downloadMerchantQRImage()">点击保存收款码图片，分享给客户扫码付款</div>
+    </div>
+
+  </div><!-- /merchant-layout -->
+</div><!-- /merchantPage -->
+
+<!-- ==================== 修改用户密码弹窗（右上角商户名点击打开） ==================== -->
+<div class="change-pwd-overlay" id="changePwdOverlay">
+  <div class="change-pwd-backdrop" onclick="closeChangePwdModal()"></div>
+  <div class="change-pwd-dialog">
+    <div class="modal-title" style="text-align:center; margin-bottom:20px;">修改登录密码</div>
+    <div class="modal-info" style="font-size:12px; color:rgba(200,190,165,0.6); margin-bottom:18px; text-align:center;">
+      请输入原密码和新密码
+    </div>
+    <div class="sec-field" style="margin-bottom:14px">
+      <label class="sec-label">原密码</label>
+      <div class="pwd-input-wrap"><input type="password" class="sec-input" id="cpOldPwd" placeholder="请输入原密码"><span class="pwd-eye" onclick="togglePwdVisibility('cpOldPwd', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+    </div>
+    <div class="sec-field" style="margin-bottom:14px">
+      <label class="sec-label">新密码</label>
+      <div class="pwd-input-wrap"><input type="password" class="sec-input" id="cpNewPwd1" placeholder="请输入新密码（至少6位）"><span class="pwd-eye" onclick="togglePwdVisibility('cpNewPwd1', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+    </div>
+    <div class="sec-field" style="margin-bottom:18px">
+      <label class="sec-label">确认新密码</label>
+      <div class="pwd-input-wrap"><input type="password" class="sec-input" id="cpNewPwd2" placeholder="再次输入新密码"><span class="pwd-eye" onclick="togglePwdVisibility('cpNewPwd2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeChangePwdModal()">取消</button>
+      <button class="btn-primary" onclick="submitChangePwd()">确认修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 忘记密码弹窗（底部链接打开） ==================== -->
+<div class="forgot-pwd-overlay" id="forgotPwdOverlay">
+  <div class="forgot-pwd-backdrop" onclick="closeForgotPwdModal()"></div>
+  <div class="forgot-pwd-dialog">
+    <div class="modal-title" style="text-align:center; margin-bottom:20px;">忘记密码</div>
+    <div class="modal-info" style="font-size:12px; color:rgba(200,190,165,0.6); margin-bottom:18px; text-align:center;">
+      请输入支付宝支付密码验证身份后重置登录密码
+    </div>
+    <div class="sec-field" style="margin-bottom:14px">
+      <label class="sec-label">支付宝支付密码</label>
+      <div class="pwd-input-wrap"><input type="password" class="sec-input" id="fpPayPwd" placeholder="请输入支付宝支付密码"><span class="pwd-eye" onclick="togglePwdVisibility('fpPayPwd', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+    </div>
+    <div class="sec-field" style="margin-bottom:14px">
+      <label class="sec-label">新密码</label>
+      <div class="pwd-input-wrap"><input type="password" class="sec-input" id="fpNewPwd1" placeholder="请输入新密码（至少6位）"><span class="pwd-eye" onclick="togglePwdVisibility('fpNewPwd1', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+    </div>
+    <div class="sec-field" style="margin-bottom:18px">
+      <label class="sec-label">确认新密码</label>
+      <div class="pwd-input-wrap"><input type="password" class="sec-input" id="fpNewPwd2" placeholder="再次输入新密码"><span class="pwd-eye" onclick="togglePwdVisibility('fpNewPwd2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeForgotPwdModal()">取消</button>
+      <button class="btn-primary" onclick="submitForgotPwd()">确认重置</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 安全设置独立overlay（点右上角商户名打开） ==================== -->
+<div class="security-overlay" id="securityOverlay">
+  <div class="security-overlay-backdrop" onclick="closeSecurityOverlay()"></div>
+  <div class="security-overlay-panel">
+
+    <div class="security-overlay-header">
+      <span class="security-overlay-title">安全设置</span>
+      <button class="security-close-btn" onclick="closeSecurityOverlay()">✕</button>
+    </div>
+
+    <div class="security-overlay-body">
+
+      <!-- 二级安全密码 -->
+      <div class="sec-card">
+        <div class="sec-card-title">安全设置</div>
+        <div class="sec-card-desc">二级安全密码管理，用于退款验证</div>
+
+        <div id="secPwdSetArea">
+          <div id="secPwdNewForm">
+            <div class="sec-field">
+              <label class="sec-label">设置安全密码</label>
+              <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secNewPassword1" placeholder="请输入安全密码（至少4位）"><span class="pwd-eye" onclick="togglePwdVisibility('secNewPassword1', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+            </div>
+            <div class="sec-field">
+              <label class="sec-label">确认安全密码</label>
+              <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secNewPassword2" placeholder="再次输入安全密码"><span class="pwd-eye" onclick="togglePwdVisibility('secNewPassword2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+            </div>
+            <button class="btn btn-primary" style="width:100%; padding:11px;" onclick="setSecurityPassword()">设置安全密码</button>
+          </div>
+          <div id="secPwdChangeForm" style="display:none">
+            <div class="sec-row">
+              <div class="sec-field">
+                <label class="sec-label">原密码</label>
+                <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secOldPassword" placeholder="输入原密码"><span class="pwd-eye" onclick="togglePwdVisibility('secOldPassword', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+              </div>
+            </div>
+            <div class="sec-row">
+              <div class="sec-field">
+                <label class="sec-label">新密码</label>
+                <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secChgNewPwd1" placeholder="输入新密码"><span class="pwd-eye" onclick="togglePwdVisibility('secChgNewPwd1', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+              </div>
+              <div class="sec-field">
+                <label class="sec-label">确认新密码</label>
+                <div class="pwd-input-wrap"><input type="password" class="sec-input" id="secChgNewPwd2" placeholder="再次输入新密码"><span class="pwd-eye" onclick="togglePwdVisibility('secChgNewPwd2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+              </div>
+            </div>
+            <button class="btn btn-primary" style="width:100%; padding:11px;" onclick="changeSecurityPassword()">修改密码</button>
+          </div>
+        </div>
+
+        <div id="secPwdStatus" style="margin-top:14px; font-size:12px; color:rgba(76,175,80,0.8); display:none;">✅ 二级安全密码已设置</div>
+      </div>
+
+      <!-- 免密退款开关 -->
+      <div class="sec-card">
+        <div class="sec-card-title">免密退款</div>
+        <div class="sec-card-desc">开启后，点击退款按钮可直接进入退款流程，无需输入安全密码</div>
+        <div class="switch-wrap">
+          <div class="switch-info">
+            <h4>免密退款模式</h4>
+            <p>开启后可直接退款，关闭则每次需验证安全密码</p>
+          </div>
+          <div class="switch-track" id="skipSwitch" onclick="toggleSkipMode(event)">
+            <div class="switch-thumb"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 二级安全密码验证弹窗（退款前触发） ==================== -->
+<div class="pwd-verify-overlay" id="pwdVerifyOverlay">
+  <div class="pwd-verify-dialog">
+    <div class="modal-title">安全验证</div>
+    <div class="modal-info" style="margin-bottom:16px">
+      为防止误操作退款，请输入<span style="color:#d4af37">二级安全密码</span>继续
+    </div>
+    <label class="modal-label">安全密码</label>
+    <div class="pwd-input-wrap"><input type="password" class="modal-input" id="verifyPwdInput" placeholder="请输入二级安全密码" onkeypress="if(event.key==='Enter')submitVerifyPwd()" autofocus><span class="pwd-eye" onclick="togglePwdVisibility('verifyPwdInput', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+    <!-- 隐藏字段：存储当前待退款的订单信息 -->
+    <input type="hidden" id="_verifyOutTradeNo" value="">
+    <input type="hidden" id="_verifyAmount" value="">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closePwdVerify()">取消</button>
+      <button class="btn-danger" onclick="submitVerifyPwd()">验证并继续</button>
+    </div>
+    <div class="pwd-verify-footer">
+      <a class="forgot-pwd-link" onclick="openResetPwdModal()">忘记密码？</a>
+      <span class="attempt-info" id="attemptInfo">剩余机会：3/3 &nbsp; 已输错：0次</span>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 忘记密码 - 重置密码弹窗 ==================== -->
+<div class="reset-pwd-overlay" id="resetPwdOverlay">
+  <div class="modal-dialog" style="min-width:420px; max-width:500px;">
+    <div class="modal-title" style="margin-bottom:12px">重置安全密码</div>
+    <div class="modal-info" style="font-size:12px; line-height:1.8">
+      请通过支付宝支付密码验证身份后重置安全密码
+    </div>
+    <div class="sec-field" style="margin-bottom:14px">
+      <label class="sec-label">支付宝支付密码</label>
+      <div class="pwd-input-wrap"><input type="password" class="sec-input" id="resetPayPwd" placeholder="请输入支付宝支付密码"><span class="pwd-eye" onclick="togglePwdVisibility('resetPayPwd', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+    </div>
+    <div class="sec-row" style="margin-bottom:18px">
+      <div class="sec-field">
+        <label class="sec-label">新安全密码</label>
+        <div class="pwd-input-wrap"><input type="password" class="sec-input" id="resetNewPwd1" placeholder="输入新密码"><span class="pwd-eye" onclick="togglePwdVisibility('resetNewPwd1', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+      </div>
+      <div class="sec-field">
+        <label class="sec-label">确认新密码</label>
+        <div class="pwd-input-wrap"><input type="password" class="sec-input" id="resetNewPwd2" placeholder="再次输入新密码"><span class="pwd-eye" onclick="togglePwdVisibility('resetNewPwd2', this)" title="显示/隐藏密码">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <svg class="eye-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+        </span></div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeResetPwdModal()">取消</button>
+      <button class="btn-primary" onclick="submitResetPwd()">确认重置</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== 登录认证 & 弹窗控制 ====================
+
+// 密码显示/隐藏切换
+function togglePwdVisibility(inputId, eyeEl) {
+  const input = document.getElementById(inputId);
+  const open = eyeEl ? eyeEl.querySelector('.eye-open') : null;
+  const close = eyeEl ? eyeEl.querySelector('.eye-close') : null;
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (open) open.style.display = 'none';
+    if (close) close.style.display = 'block';
+  } else {
+    input.type = 'password';
+    if (open) open.style.display = 'block';
+    if (close) close.style.display = 'none';
+  }
+}
+
+const TOKEN_KEY = 'heijin_merchant_token';
+
+// 获取当前token
+function getToken() {
+  return sessionStorage.getItem(TOKEN_KEY) || '';
+}
+
+// 修改密码弹窗
+function openChangePwdModal() {
+  document.getElementById('changePwdOverlay').classList.add('show');
+  document.getElementById('cpOldPwd').value = '';
+  document.getElementById('cpNewPwd1').value = '';
+  document.getElementById('cpNewPwd2').value = '';
+  document.getElementById('cpOldPwd').focus();
+}
+function closeChangePwdModal() {
+  document.getElementById('changePwdOverlay').classList.remove('show');
+}
+
+// 提交修改密码
+async function submitChangePwd() {
+  const oldPwd = document.getElementById('cpOldPwd').value.trim();
+  const newPwd1 = document.getElementById('cpNewPwd1').value.trim();
+  const newPwd2 = document.getElementById('cpNewPwd2').value.trim();
+
+  if (!oldPwd) {
+    alert('请输入原密码');
+    return;
+  }
+  if (!newPwd1 || newPwd1.length < 6) {
+    alert('新密码长度不能少于6位');
+    return;
+  }
+  if (newPwd1 !== newPwd2) {
+    alert('两次输入的新密码不一致');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/login/change-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': getToken()
+      },
+      body: JSON.stringify({
+        oldPassword: oldPwd,
+        newPassword: newPwd1,
+        confirmPassword: newPwd2
+      })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      alert('密码修改成功！');
+      closeChangePwdModal();
+    } else {
+      alert(json.message || '修改失败');
+    }
+  } catch (e) {
+    alert('修改失败：' + e.message);
+  }
+}
+
+// 忘记密码弹窗
+function openForgotPwdModal() {
+  document.getElementById('forgotPwdOverlay').classList.add('show');
+  document.getElementById('fpPayPwd').value = '';
+  document.getElementById('fpNewPwd1').value = '';
+  document.getElementById('fpNewPwd2').value = '';
+  document.getElementById('fpPayPwd').focus();
+}
+function closeForgotPwdModal() {
+  document.getElementById('forgotPwdOverlay').classList.remove('show');
+}
+
+// 提交忘记密码
+async function submitForgotPwd() {
+  const payPwd = document.getElementById('fpPayPwd').value.trim();
+  const newPwd1 = document.getElementById('fpNewPwd1').value.trim();
+  const newPwd2 = document.getElementById('fpNewPwd2').value.trim();
+
+  if (!payPwd || payPwd.length < 6) {
+    alert('请输入有效的支付宝支付密码');
+    return;
+  }
+  if (!newPwd1 || newPwd1.length < 6) {
+    alert('新密码长度不能少于6位');
+    return;
+  }
+  if (newPwd1 !== newPwd2) {
+    alert('两次输入的新密码不一致');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/login/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        payPassword: payPwd,
+        newPassword: newPwd1,
+        confirmPassword: newPwd2
+      })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      alert('密码重置成功！请使用新密码登录。');
+      closeForgotPwdModal();
+      // 退出登录
+      sessionStorage.removeItem(TOKEN_KEY);
+      location.href = 'login.html';
+    } else {
+      alert(json.message || '重置失败');
+    }
+  } catch (e) {
+    alert('重置失败：' + e.message);
+  }
+}
+
+// 检查登录状态
+async function checkLoginStatus() {
+  const token = getToken();
+  if (!token) {
+    location.href = 'login.html';
+    return false;
+  }
+  try {
+    const res = await fetch('/api/login/check', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token
+      }
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      return true;
+    } else {
+      sessionStorage.removeItem(TOKEN_KEY);
+      location.href = 'login.html';
+      return false;
+    }
+  } catch (e) {
+    sessionStorage.removeItem(TOKEN_KEY);
+    location.href = 'login.html';
+    return false;
+  }
+}
+
+// 退出登录
+function logout() {
+  sessionStorage.removeItem(TOKEN_KEY);
+  location.href = 'login.html';
+}
+
+// ==================== 订单数据加载 ====================
+const PAGE_SIZE = 10;
+let allOrders = [];
+let filteredOrders = [];
+let currentPage = 1;
+
+// 状态映射
+const STATUS_MAP = {
+  'generated':       { text: '订单生成', cls: 'status-generated' },
+  'paying':          { text: '支付中',   cls: 'status-paying' },
+  'paid':            { text: '支付成功', cls: 'status-success' },
+  'refunded':        { text: '已退款',   cls: 'status-refund' },
+  'partial_refund':  { text: '部分退款', cls: 'status-refund' },
+};
+
+// 格式化时间：年-月-日 时:分:秒
+function fmtTime(isoStr) {
+  if (!isoStr) return '--';
+  const d = new Date(isoStr);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// 加载订单列表
+async function loadOrders() {
+  try {
+    const res = await fetch('/api/orders');
+    const json = await res.json();
+    if (json.code === 'OK') {
+      allOrders = json.data;
+      applyFilters();
+    }
+  } catch (e) {
+    console.error('加载订单失败:', e);
+  }
+}
+
+// 渲染表格
+function renderOrders() {
+  const orders = filteredOrders;
+  const tbody = document.getElementById('ordersTableBody');
+  if (!tbody) return;
+  const total = orders.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageOrders = orders.slice(start, start + PAGE_SIZE);
+
+  // 今日交易额
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const todayTotal = orders
+    .filter(o => (o.status === 'paid' || o.status === 'refunded' || o.status === 'partial_refund') && o.paidAt && new Date(o.paidAt) >= today)
+    .reduce((sum, o) => sum + parseFloat(o.amount || 0), 0);
+
+  // 更新统计条
+  document.getElementById('orderCount').textContent = total;
+  document.getElementById('todayAmount').textContent = fmtAmount(todayTotal);
+
+  if (pageOrders.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:rgba(212,175,55,0.3)">暂无订单数据</td></tr>';
+  } else {
+    tbody.innerHTML = pageOrders.map(o => {
+      const statusInfo = STATUS_MAP[o.status] || { text: o.status, cls: 'status-none' };
+      const createTime = fmtTime(o.createdAt);
+      const paidTime = o.paidAt ? fmtTime(o.paidAt) : '';
+      return `<tr>
+        <td class="order-no-cell" title="${o.tradeNo || o.outTradeNo}">${o.tradeNo || o.outTradeNo}</td>
+        <td class="amount-cell">${fmtAmount(parseFloat(o.amount))}</td>
+        <td>支付宝扫码</td>
+        <td><span class="status-badge ${statusInfo.cls}">${statusInfo.text}</span></td>
+        <td class="date-cell">
+          <span class="date-row"><span class="date-label">创建</span>${createTime}</span>
+          ${paidTime ? `<span class="date-row"><span class="date-label">支付</span>${paidTime}</span>` : ''}
+          ${o.refund ? `<span class="date-row"><span class="date-label">退款</span>${fmtTime(o.refund.refundedAt)}</span>` : ''}
+        </td>
+        <td>
+          ${o.status === 'paid' && !o.refund ? `<button class="btn-refund" onclick="handleRefundClick('${o.outTradeNo}', '${fmtAmount(parseFloat(o.amount))}')">退款</button>` : ''}
+          ${o.refund ? `<span class="refund-info">已退款</span>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  // 渲染分页
+  document.getElementById('totalCount').textContent = total;
+  const rangeEnd = Math.min(start + PAGE_SIZE, total);
+  const rangeStart = total === 0 ? 0 : start + 1;
+  const itemsOnThisPage = total === 0 ? 0 : (rangeEnd - rangeStart + 1);
+  document.getElementById('pageRange').textContent = currentPage + '页-' + itemsOnThisPage + '条';
+  renderPagination(total, totalPages);
+}
+
+function renderPagination(total, totalPages) {
+  const container = document.getElementById('pageBtns');
+  container.innerHTML = '';
+
+  if (totalPages <= 1) return;
+
+  // 上一页
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'page-btn-nav';
+  prevBtn.innerHTML = '&#9664; 上一页';
+  prevBtn.disabled = currentPage === 1;
+  prevBtn.onclick = () => { if (currentPage > 1) { currentPage--; renderOrders(); } };
+  container.appendChild(prevBtn);
+
+  // 页码
+  const maxShow = 5;
+  let startPage = Math.max(1, currentPage - Math.floor(maxShow / 2));
+  let endPage = Math.min(totalPages, startPage + maxShow - 1);
+  if (endPage - startPage < maxShow - 1) {
+    startPage = Math.max(1, endPage - maxShow + 1);
+  }
+
+  if (startPage > 1) {
+    const firstBtn = document.createElement('button');
+    firstBtn.className = 'page-btn-num';
+    firstBtn.textContent = '1';
+    firstBtn.onclick = () => { currentPage = 1; renderOrders(); };
+    container.appendChild(firstBtn);
+    if (startPage > 2) {
+      const ellipsis = document.createElement('span');
+      ellipsis.textContent = '...';
+      ellipsis.style.cssText = 'color:rgba(212,175,55,0.3);padding:0 4px;font-size:12px';
+      container.appendChild(ellipsis);
+    }
+  }
+
+  for (let i = startPage; i <= endPage; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'page-btn-num' + (i === currentPage ? ' active' : '');
+    btn.textContent = i;
+    btn.onclick = () => { currentPage = i; renderOrders(); };
+    container.appendChild(btn);
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) {
+      const ellipsis = document.createElement('span');
+      ellipsis.textContent = '...';
+      ellipsis.style.cssText = 'color:rgba(212,175,55,0.3);padding:0 4px;font-size:12px';
+      container.appendChild(ellipsis);
+    }
+    const lastBtn = document.createElement('button');
+    lastBtn.className = 'page-btn-num';
+    lastBtn.textContent = totalPages;
+    lastBtn.onclick = () => { currentPage = totalPages; renderOrders(); };
+    container.appendChild(lastBtn);
+  }
+
+  // 下一页
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'page-btn-nav';
+  nextBtn.innerHTML = '下一页 &#9654;';
+  nextBtn.disabled = currentPage === totalPages;
+  nextBtn.onclick = () => { if (currentPage < totalPages) { currentPage++; renderOrders(); } };
+  container.appendChild(nextBtn);
+}
+
+// ==================== 日历选择器 ====================
+
+const calState = {
+  yearMonth: [0, 0],       // [leftYear, leftMonth]  0=Jan..11
+  activeField: 'start',    // 'start' or 'end'
+  startDate: null,         // ISO "YYYY-MM-DD"
+  endDate: null,           // ISO "YYYY-MM-DD"
+  picking: null,           // internally tracking which date is being set first
+  currentPopupMonth: [0,0],
+  isTrendMode: false,      // 是否为趋势图自定义模式
+};
+
+function formatDate(y, m, d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${y}-${pad(m + 1)}-${pad(d)}`;
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function isSameDay(a, b) {
+  return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function getYearMonth(y, m, delta) {
+  const d = new Date(y, m + delta, 1);
+  return [d.getFullYear(), d.getMonth()];
+}
+
+function daysInMonth(y, m) {
+  return new Date(y, m + 1, 0).getDate();
+}
+
+function renderCalendars() {
+  const [baseY, baseM] = calState.yearMonth;
+  const [rightY, rightM] = getYearMonth(baseY, baseM, 1);
+
+  calState.currentPopupMonth = [baseY, baseM];
+
+  const todayDate = new Date();
+  const start = calState.startDate ? parseDate(calState.startDate) : null;
+  const end = calState.endDate ? parseDate(calState.endDate) : null;
+
+  const months = [
+    { el: document.getElementById('calMonthLeft'), y: baseY, m: baseM },
+    { el: document.getElementById('calMonthRight'), y: rightY, m: rightM },
+  ];
+
+  months.forEach(({ el, y, m }) => {
+    const monthNames = [
+      '1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'
+    ];
+
+    let html = `
+      <div class="cal-month-header">
+        <button class="cal-nav-btn" onclick="event.stopPropagation(); calPrevMonth()">&#9664;</button>
+        <span class="cal-month-title">${y}年 ${monthNames[m]}</span>
+        <button class="cal-nav-btn" onclick="event.stopPropagation(); calNextMonth()">&#9654;</button>
+      </div>
+      <div class="cal-weekdays">
+        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+      </div>
+      <div class="cal-days">`;
+
+    // First day of month (0=Sun)
+    const firstDay = new Date(y, m, 1).getDay();
+    const totalDays = daysInMonth(y, m);
+    // Previous month days to show
+    const [prevY, prevM] = getYearMonth(y, m, -1);
+    const prevTotalDays = daysInMonth(prevY, prevM);
+
+    // Previous month days
+    for (let i = firstDay - 1; i >= 0; i--) {
+      const d = prevTotalDays - i;
+      html += `<div class="cal-day other-month">${d}</div>`;
+    }
+
+    // 计算28天上限（选择开始日期后，结束日期最多+27天，共28天）
+    var maxEndDate = null;
+    if (start && calState.picking === 'end') {
+      maxEndDate = new Date(start);
+      maxEndDate.setDate(maxEndDate.getDate() + 27);
+    }
+
+    // Current month days
+    for (let d = 1; d <= totalDays; d++) {
+      const dateObj = new Date(y, m, d);
+      const dateStr = formatDate(y, m, d);
+      let cls = 'cal-day';
+      let disabled = false;
+
+      // 超出28天限制的日期 → 置灰不可点
+      if (maxEndDate && dateObj.getTime() > maxEndDate.getTime()) {
+        disabled = true;
+        cls += ' cal-disabled';
+      }
+
+      // Today check
+      if (dateObj.toDateString() === todayDate.toDateString()) {
+        cls += ' today';
+      }
+
+      // Range check
+      if (start && end) {
+        const t = dateObj.getTime();
+        const s = start.getTime();
+        const e = end.getTime();
+        const isStart = isSameDay(dateObj, start);
+        const isEnd = isSameDay(dateObj, end);
+        if (isStart && isEnd) {
+          cls += ' range-both';
+        } else if (isStart) {
+          cls += ' range-start';
+        } else if (isEnd) {
+          cls += ' range-end';
+        } else if (t > s && t < e) {
+          cls += ' in-range';
+        }
+      } else if (start && isSameDay(dateObj, start)) {
+        cls += ' range-both';
+      }
+
+      if (disabled) {
+        html += `<div class="${cls}" data-date="${dateStr}">${d}</div>`;
+      } else {
+        html += `<div class="${cls}" onclick="event.stopPropagation(); calSelectDate('${dateStr}')" data-date="${dateStr}">${d}</div>`;
+      }
+    }
+
+    // Next month days to fill remaining cells
+    const remaining = 7 - ((firstDay + totalDays) % 7);
+    if (remaining < 7) {
+      for (let d = 1; d <= remaining; d++) {
+        html += `<div class="cal-day other-month">${d}</div>`;
+      }
+    }
+
+    html += '</div>';
+    el.innerHTML = html;
+  });
+}
+
+function calPrevMonth() {
+  calState.yearMonth = getYearMonth(...calState.yearMonth, -1);
+  renderCalendars();
+}
+
+function calNextMonth() {
+  calState.yearMonth = getYearMonth(...calState.yearMonth, 1);
+  renderCalendars();
+}
+
+function calSelectDate(dateStr) {
+  const dateObj = parseDate(dateStr);
+  if (!dateObj) return;
+
+  const start = calState.startDate ? parseDate(calState.startDate) : null;
+
+  if (!start || calState.picking === 'start') {
+    // 第一击：设置开始日期，同时 endDate = startDate（立刻高亮单日）
+    calState.startDate = dateStr;
+    calState.endDate = dateStr;
+    calState.picking = 'end';
+    if (!calState.isTrendMode) {
+      document.getElementById('startDateInput').value = dateStr;
+      document.getElementById('endDateInput').value = dateStr;
+    }
+  } else {
+    // 第二击：调整结束日期（只允许在28天内）
+    const startTime = parseDate(calState.startDate).getTime();
+    const endTime = dateObj.getTime();
+    if (endTime >= startTime) {
+      calState.endDate = dateStr;
+      calState.picking = 'start';
+    } else {
+      // 点击的日期早于开始日期 → 重新设定开始日期
+      calState.startDate = dateStr;
+      calState.endDate = dateStr;
+      calState.picking = 'end';
+    }
+    if (!calState.isTrendMode) {
+      document.getElementById('startDateInput').value = calState.startDate;
+      document.getElementById('endDateInput').value = calState.endDate;
+    }
+  }
+  updateCalHeader();
+  renderCalendars();
+
+  /* 趋势图模式且已选完/调整完日期 → 显示底部按钮栏 */
+  if (calState.isTrendMode && calState.startDate) {
+    var footer = document.getElementById('calFooter');
+    if (footer) footer.style.display = 'flex';
+  }
+}
+
+/* 更新日历头部日期显示 */
+function updateCalHeader() {
+  var hStart = document.getElementById('calHeaderStart');
+  var hEnd = document.getElementById('calHeaderEnd');
+  if (hStart && hEnd) {
+    hStart.textContent = calState.startDate || '开始日期';
+    hEnd.textContent = calState.endDate || '结束日期';
+    // 有值时加亮
+    hStart.style.opacity = calState.startDate ? '1' : '0.5';
+    hEnd.style.opacity = calState.endDate ? '1' : '0.5';
+  }
+}
+
+/* 确认按钮点击 → 应用筛选并关闭 */
+function calConfirmDate() {
+  if (!calState.startDate || !calState.endDate) {
+    showAlert('请选择完整的日期范围');
+    return;
+  }
+  // 28天限制由UI置灰保证
+  if (calState.isTrendMode) {
+    var s = calState.startDate.split('-');
+    var e = calState.endDate.split('-');
+    document.getElementById('trendRangeLabel').textContent =
+      s[1] + '-' + s[2] + ' ~ ' + e[1] + '-' + e[2];
+    _trendRange = 'custom';
+    closeDatePicker();
+    if (allOrders && allOrders.length > 0) drawTrendChart(allOrders);
+  } else {
+    document.getElementById('startDateInput').value = calState.startDate;
+    document.getElementById('endDateInput').value = calState.endDate;
+    closeDatePicker();
+    applyFilters();
+  }
+}
+
+/* 最近一个月快捷 */
+function calQuickLastMonth() {
+  var today = new Date();
+  var start = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+  var end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  calState.startDate = formatDate(start.getFullYear(), start.getMonth(), start.getDate());
+  calState.endDate = formatDate(end.getFullYear(), end.getMonth(), end.getDate());
+  calState.picking = 'start';
+  updateCalHeader();
+  renderCalendars();
+  var footer = document.getElementById('calFooter');
+  if (footer) footer.style.display = 'flex';
+}
+
+function closeDatePicker() {
+  document.getElementById('datePickerPopup').classList.remove('show');
+  calState.isTrendMode = false;
+}
+
+// ==================== 趋势图时间段选择器 ====================
+var _trendRange = '7'; // 默认最近7天
+
+function toggleTrendRangeMenu() {
+  var menu = document.getElementById('trendRangeMenu');
+  menu.classList.toggle('show');
+}
+
+// 点击页面其他地方关闭菜单
+document.addEventListener('click', function(e) {
+  var btn = document.getElementById('trendRangeBtn');
+  var menu = document.getElementById('trendRangeMenu');
+  if (menu && menu.classList.contains('show') && !menu.contains(e.target) && !btn.contains(e.target)) {
+    menu.classList.remove('show');
+  }
+});
+
+function selectTrendRange(range, el) {
+  _trendRange = String(range); // 统一为字符串，避免数字/字符串类型不匹配
+  // 更新按钮文字
+  var labelMap = { '7': '最近七天', '30': '最近三十天', 'month': '本月', 'lastMonth': '上月' };
+  document.getElementById('trendRangeLabel').textContent = labelMap[range] || range;
+  // 更新active状态
+  var items = document.querySelectorAll('.trend-range-item');
+  items.forEach(function(item) { item.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  // 关闭菜单
+  document.getElementById('trendRangeMenu').classList.remove('show');
+  // 重绘趋势图
+  if (allOrders && allOrders.length > 0) {
+    drawTrendChart(allOrders);
+  }
+}
+
+function openTrendDatePicker() {
+  document.getElementById('trendRangeMenu').classList.remove('show');
+  const btn = document.getElementById('trendRangeBtn');
+  // 重置日历状态为趋势图自定义模式
+  calState.isTrendMode = true;
+  calState.startDate = null;
+  calState.endDate = null;
+  calState.picking = 'start';
+  const today = new Date();
+  calState.yearMonth = [today.getFullYear(), today.getMonth()];
+  // 隐藏底部按钮栏（等选完两个日期再显示）
+  var footer = document.getElementById('calFooter');
+  if (footer) footer.style.display = 'none';
+  // 清空头部显示
+  var hs = document.getElementById('calHeaderStart');
+  var he = document.getElementById('calHeaderEnd');
+  if (hs) { hs.textContent = '开始日期'; hs.style.opacity = '0.5'; }
+  if (he) { he.textContent = '结束日期'; he.style.opacity = '0.5'; }
+  renderCalendars();
+  openDatePicker('start', btn);
+}
+
+
+function openDatePicker(field, anchorEl) {
+  calState.activeField = field;
+
+  // 非趋势图模式时重置标志
+  if (!calState.isTrendMode) {
+    // Initialize calendar based on current date inputs
+    const startVal = document.getElementById('startDateInput').value;
+    const endVal = document.getElementById('endDateInput').value;
+
+    if (startVal && endVal) {
+      calState.startDate = startVal;
+      calState.endDate = endVal;
+    } else if (startVal && !endVal) {
+      calState.startDate = startVal;
+      calState.endDate = null;
+    } else {
+      calState.startDate = null;
+      calState.endDate = null;
+    }
+
+    // Set displayed month to the start date or today
+    const refDate = startVal ? parseDate(startVal) : new Date();
+    calState.yearMonth = [refDate.getFullYear(), refDate.getMonth()];
+  }
+
+  calState.picking = calState.startDate ? 'end' : 'start';
+
+  renderCalendars();
+
+  const popup = document.getElementById('datePickerPopup');
+  const targetEl = anchorEl || (field === 'start' ? document.getElementById('startDateWrap') : document.getElementById('endDateWrap'));
+  const rect = targetEl.getBoundingClientRect();
+
+  popup.style.position = 'fixed';
+  popup.style.top = (rect.bottom + 6) + 'px';
+  popup.style.left = Math.max(16, rect.left) + 'px';
+  popup.classList.add('show');
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', calOutsideClick);
+  }, 10);
+}
+
+function calOutsideClick(e) {
+  const popup = document.getElementById('datePickerPopup');
+  if (!popup.classList.contains('show')) return;
+  if (popup.contains(e.target)) return;
+  if (e.target.closest('.date-input-wrap') || e.target.closest('.cal-nav-btn') || e.target.closest('.trend-range-selector')) return;
+  closeDatePicker();
+  document.removeEventListener('click', calOutsideClick);
+}
+
+// ==================== 筛选 ====================
+
+function applyFilters() {
+  const statusVal = document.getElementById('statusFilter')?.value || '';
+  const orderSearch = document.getElementById('orderSearch')?.value?.trim() || '';
+  const startDate = document.getElementById('startDateInput')?.value || '';
+  const endDate = document.getElementById('endDateInput')?.value || '';
+  const payMethod = document.getElementById('payMethodFilter')?.value || '';
+
+  filteredOrders = allOrders.filter(o => {
+    // 状态筛选
+    if (statusVal && o.status !== statusVal) return false;
+    // 订单号模糊搜索（匹配 outTradeNo 或 tradeNo）
+    if (orderSearch && !(o.outTradeNo || '').includes(orderSearch) && !(o.tradeNo || '').includes(orderSearch)) return false;
+    // 支付方式筛选
+    if (payMethod && payMethod !== '支付宝扫码') return false;
+    // 日期范围：只有一个日期时等同于筛选当天；两个日期时筛选区间
+    if (startDate || endDate) {
+      const created = new Date(o.createdAt);
+      const s = startDate ? new Date(startDate + 'T00:00:00') : new Date(endDate + 'T00:00:00');
+      const e = endDate ? new Date(endDate + 'T23:59:59') : new Date(startDate + 'T23:59:59');
+      if (created < s || created > e) return false;
+    }
+    return true;
+  });
+
+  currentPage = 1;
+  renderOrders();
+}
+
+function resetFilters() {
+  var el;
+  el = document.getElementById('statusFilter'); if (el) el.value = '';
+  el = document.getElementById('orderSearch'); if (el) el.value = '';
+  el = document.getElementById('payMethodFilter'); if (el) el.value = '';
+  el = document.getElementById('startDateInput'); if (el) el.value = '';
+  el = document.getElementById('endDateInput'); if (el) el.value = '';
+  calState.startDate = null;
+  calState.endDate = null;
+  filteredOrders = allOrders;
+  currentPage = 1;
+  renderOrders();
+}
+
+// ==================== 退款 ====================
+
+let refundOutTradeNo = '';
+
+// 点击退款按钮 → 先检查安全密码设置
+function handleRefundClick(outTradeNo, amount) {
+  if (securityData.skipPassword) {
+    // 免密模式 → 直接打开退款弹窗
+    openRefundModal(outTradeNo, amount);
+  } else if (securityData.hasPassword) {
+    // 有安全密码 → 先验证
+    openPwdVerify(outTradeNo, amount);
+  } else {
+    // 未设置安全密码 → 直接退款（提示去设置）
+    openRefundModal(outTradeNo, amount);
+  }
+}
+
+function openRefundModal(outTradeNo, amount) {
+  refundOutTradeNo = outTradeNo;
+  document.getElementById('refundOrderNo').textContent = outTradeNo;
+  document.getElementById('refundOrigAmount').textContent = amount;
+  const numAmount = amount.replace(/¥/g, '');
+  document.getElementById('refundAmountInput').value = numAmount;  // 默认全额退款
+  document.getElementById('refundAmountInput').max = numAmount;
+  document.getElementById('refundModalOverlay').classList.add('show');
+}
+
+function closeRefundModal() {
+  document.getElementById('refundModalOverlay').classList.remove('show');
+  refundOutTradeNo = '';
+}
+
+function closeRefundSuccess() {
+  document.getElementById('refundSuccessOverlay').classList.remove('show');
+}
+
+async function confirmRefund() {
+  const amount = document.getElementById('refundAmountInput').value.trim();
+  if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+    showAlert('请输入有效的退款金额');
+    return;
+  }
+
+  const btn = document.querySelector('.btn-danger');
+  btn.textContent = '退款中...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/refund', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outTradeNo: refundOutTradeNo, refundAmount: amount }),
+    });
+    const json = await res.json();
+
+    if (json.code === 'OK') {
+      closeRefundModal();
+      document.getElementById('refundSuccessOverlay').classList.add('show');
+      loadDashboard();  // 刷新仪表盘
+    } else {
+      showAlert('退款失败：' + (json.message || '未知错误'));
+    }
+  } catch (e) {
+    showAlert('退款请求异常：' + e.message);
+  } finally {
+    btn.textContent = '确认退款';
+    btn.disabled = false;
+  }
+}
+
+// 点击遮罩关闭弹窗
+document.getElementById('refundModalOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeRefundModal();
+});
+document.getElementById('refundSuccessOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeRefundSuccess();
+});
+
+// ==================== 初始化 ====================
+
+// 金额格式化：0只显示整数，有小数最多两位
+function fmtAmount(num) {
+  if (num === 0) return '¥0';
+  const fixed = parseFloat(num.toFixed(2));
+  if (fixed === Math.floor(fixed)) return '¥' + fixed.toFixed(0);
+  return '¥' + fixed.toFixed(2).replace(/0+$/, '');
+}
+/* 图表专用：返回纯数字字符串（不带¥），整数不显示小数 */
+function fmtChartVal(val) {
+  const n = parseFloat(val);
+  if (isNaN(n)) return '0';
+  const fixed = parseFloat(n.toFixed(2));
+  if (fixed === Math.floor(fixed)) return fixed.toFixed(0);
+  var s = fixed.toFixed(2);
+  return s.replace(/0+$/, '').replace(/\.$/, '');
+}
+// 加载仪表盘数据
+async function loadDashboard() {
+  try {
+    const res = await fetch('/api/orders');
+    const json = await res.json();
+    if (json.code !== 'OK') return;
+    allOrders = json.data;
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // 今日交易额 / 交易笔数（支付成功 + 已退款）
+    const todayCompleted = allOrders.filter(function(o) {
+      return (o.status === 'paid' || o.status === 'refunded' || o.status === 'partial_refund') && o.paidAt && new Date(o.paidAt) >= today;
+    });
+    const todayAmount = todayCompleted.reduce(function(s, o) { return s + parseFloat(o.amount || 0); }, 0);
+    const todayCount = todayCompleted.length;
+    const avgAmount = todayCount > 0 ? todayAmount / todayCount : 0;
+
+    // 本月交易（支付成功 + 已退款）
+    const monthCompleted = allOrders.filter(function(o) {
+      return (o.status === 'paid' || o.status === 'refunded' || o.status === 'partial_refund') && o.paidAt && new Date(o.paidAt) >= monthStart;
+    });
+    const monthAmount = monthCompleted.reduce(function(s, o) { return s + parseFloat(o.amount || 0); }, 0);
+    const monthCount = monthCompleted.length;
+
+    // 本月退款金额（从已退款订单中提取实际退款金额）
+    const monthRefunds = allOrders.filter(function(o) {
+      if (!o.createdAt) return false;
+      var ct = new Date(o.createdAt);
+      return (o.status === 'refunded' || o.status === 'partial_refund') && ct >= monthStart;
+    });
+    const monthRefundAmount = monthRefunds.reduce(function(s, o) {
+      if (o.refund && o.refund.refundAmount) return s + parseFloat(o.refund.refundAmount);
+      // 全额退款时 refund 对象存在但可能字段名不同，兜底用订单原金额
+      if (o.status === 'refunded') return s + parseFloat(o.amount || 0);
+      // 部分退款：refundAmount 是实际退款金额
+      if (o.refund) return s + parseFloat(Object.values(o.refund).find(function(v) { return !isNaN(parseFloat(v)); }) || 0);
+      return s;
+    }, 0);
+
+    // 成功率（本月）— 分子=已完成(支付成功+已退款)，分母=总订单
+    const totalMonth = allOrders.filter(function(o) { return o.createdAt && new Date(o.createdAt) >= monthStart; }).length;
+    const successRate = totalMonth > 0 ? ((monthCount / totalMonth) * 100).toFixed(2) + '%' : '--';
+
+    // 更新卡片
+    document.getElementById('dashTodayAmount').textContent = fmtAmount(todayAmount);
+    document.getElementById('dashTodayCount').textContent = todayCount;
+    document.getElementById('dashAvgAmount').textContent = fmtAmount(avgAmount);
+    document.getElementById('dashSuccessRate').textContent = successRate;
+
+    // 数据大盘
+    document.getElementById('dashMonthAmount').textContent = fmtAmount(monthAmount);
+    document.getElementById('dashMonthCount').textContent = monthCount + ' 笔';
+    document.getElementById('dashMonthRefunds').textContent = monthRefunds.length + ' 笔';
+    document.getElementById('dashMonthRefundAmount').textContent = fmtAmount(monthRefundAmount);
+
+    // 绘制趋势图
+    drawTrendChart(allOrders);
+
+    // 最近订单
+    renderRecentOrders(allOrders);
+
+  } catch (e) {
+    console.error('加载仪表盘失败:', e);
+  }
+}
+
+// 绘制趋势图（根据 _trendRange 动态调整时间段）
+function drawTrendChart(orders) {
+  const canvas = document.getElementById('trendChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.scale(dpr, dpr);
+  const W = rect.width;
+  const H = rect.height;
+
+  // 清空
+  ctx.clearRect(0, 0, W, H);
+
+  // 根据 _trendRange 确定日期范围
+  var rangeType = _trendRange || '7';
+  var days = [];
+  var now = new Date();
+  var labelKey = '';
+
+  if (typeof rangeType === 'string' && (rangeType.startsWith('20') || rangeType.includes('-'))) {
+    // 自定义模式：calState 中存储了 startDate 和 endDate
+    var startStr = calState.startDate;
+    var endStr = calState.endDate;
+    if (startStr && endStr) {
+      var sd = parseDate(startStr);
+      var ed = parseDate(endStr);
+      // 按天遍历
+      var cur = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate());
+      var endD = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate());
+      while (cur <= endD) {
+        var ds = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate());
+        var de = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
+        var dayPaid = orders.filter(function(o) { return (o.status === 'paid' || o.status === 'refunded' || o.status === 'partial_refund') && o.paidAt && new Date(o.paidAt) >= ds && new Date(o.paidAt) < de; });
+        days.push({
+          date: ds,
+          label: (ds.getMonth() + 1) + '/' + ds.getDate(),
+          count: dayPaid.length,
+          amount: dayPaid.reduce(function(s, o) { return s + parseFloat(o.amount || 0); }, 0)
+        });
+        cur.setDate(cur.getDate() + 1);
+      }
+      labelKey = 'custom';
+    }
+  } else if (rangeType === '30') {
+    // 最近三十天
+    for (var i = 29; i >= 0; i--) {
+      var d = new Date(); d.setDate(d.getDate() - i);
+      var ds = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      var de = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+      var dayPaid = orders.filter(function(o) { return (o.status === 'paid' || o.status === 'refunded' || o.status === 'partial_refund') && o.paidAt && new Date(o.paidAt) >= ds && new Date(o.paidAt) < de; });
+      days.push({
+        label: (ds.getMonth() + 1) + '/' + ds.getDate(),
+        count: dayPaid.length,
+        amount: dayPaid.reduce(function(s, o) { return s + parseFloat(o.amount || 0); }, 0)
+      });
+    }
+    labelKey = '30';
+  } else if (rangeType === 'month') {
+    // 本月
+    var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    for (var m = 0;; m++) {
+      var md = new Date(monthStart); md.setDate(monthStart.getDate() + m);
+      if (md > todayEnd) break;
+      var ds = new Date(md.getFullYear(), md.getMonth(), md.getDate());
+      var de = new Date(md.getFullYear(), md.getMonth(), md.getDate() + 1);
+      var dayPaid = orders.filter(function(o) { return (o.status === 'paid' || o.status === 'refunded' || o.status === 'partial_refund') && o.paidAt && new Date(o.paidAt) >= ds && new Date(o.paidAt) < de; });
+      days.push({
+        label: (ds.getMonth() + 1) + '/' + ds.getDate(),
+        count: dayPaid.length,
+        amount: dayPaid.reduce(function(s, o) { return s + parseFloat(o.amount || 0); }, 0)
+      });
+    }
+    labelKey = 'month';
+  } else if (rangeType === 'lastMonth') {
+    // 上月
+    var lmStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    var lmEnd = new Date(now.getFullYear(), now.getMonth(), 1); // 本月1号
+    var lastDayOfLastMonth = new Date(lmEnd.getTime() - 86400000).getDate();
+    for (var ld = 1; ld <= lastDayOfLastMonth; ld++) {
+      var ds = new Date(lmStart.getFullYear(), lmStart.getMonth() - 1 + 1, ld);
+      var de = new Date(ds.getFullYear(), ds.getMonth(), ds.getDate() + 1);
+      var dayPaid = orders.filter(function(o) { return (o.status === 'paid' || o.status === 'refunded' || o.status === 'partial_refund') && o.paidAt && new Date(o.paidAt) >= ds && new Date(o.paidAt) < de; });
+      days.push({
+        label: (ds.getMonth() + 1) + '/' + ds.getDate(),
+        count: dayPaid.length,
+        amount: dayPaid.reduce(function(s, o) { return s + parseFloat(o.amount || 0); }, 0)
+      });
+    }
+    labelKey = 'lastMonth';
+  } else {
+    // 默认：最近七天
+    for (var j = 6; j >= 0; j--) {
+      var d7 = new Date(); d7.setDate(d7.getDate() - j);
+      var ds7 = new Date(d7.getFullYear(), d7.getMonth(), d7.getDate());
+      var de7 = new Date(d7.getFullYear(), d7.getMonth(), d7.getDate() + 1);
+      var dayPaid7 = orders.filter(function(o) { return (o.status === 'paid' || o.status === 'refunded' || o.status === 'partial_refund') && o.paidAt && new Date(o.paidAt) >= ds7 && new Date(o.paidAt) < de7; });
+      days.push({
+        label: (ds7.getMonth() + 1) + '/' + ds7.getDate(),
+        count: dayPaid7.length,
+        amount: dayPaid7.reduce(function(s, o) { return s + parseFloat(o.amount || 0); }, 0)
+      });
+    }
+    labelKey = '7';
+  }
+
+  // 如果没有数据点，显示空状态
+  if (days.length === 0) {
+    ctx.fillStyle = 'rgba(200,190,165,0.3)';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('暂无数据', W / 2, H / 2);
+    return;
+  }
+
+  const maxAmount = Math.max(...days.map(function(d) { return d.amount; }), 1);
+  const padding = { top: 24, right: 16, bottom: 40, left: 60 };
+  const plotW = W - padding.left - padding.right;
+  const plotH = H - padding.top - padding.bottom;
+
+  // Y轴和网格线（黑金流光主题）
+  ctx.strokeStyle = 'rgba(212,175,55,0.08)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + (plotH / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(W - padding.right, y);
+    ctx.stroke();
+
+    // Y轴标签
+    const val = maxAmount * (1 - i / 4);
+    ctx.fillStyle = 'rgba(212,175,55,0.35)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(fmtChartVal(val), padding.left - 8, y + 4);
+  }
+
+  // 渐变区域（金色）
+  const grad = ctx.createLinearGradient(0, padding.top, 0, H - padding.bottom);
+  grad.addColorStop(0, 'rgba(212,175,55,0.25)');
+  grad.addColorStop(1, 'rgba(212,175,55,0.02)');
+
+  // 绘制面积
+  ctx.beginPath();
+  const xStep = days.length > 1 ? plotW / (days.length - 1) : plotW;
+  days.forEach((d, i) => {
+    const x = padding.left + xStep * i;
+    const y = padding.top + plotH * (1 - d.amount / maxAmount);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.lineTo(padding.left + plotW, H - padding.bottom);
+  ctx.lineTo(padding.left, H - padding.bottom);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // 绘制折线（金色发光）
+  ctx.beginPath();
+  days.forEach((d, i) => {
+    const x = padding.left + xStep * i;
+    const y = padding.top + plotH * (1 - d.amount / maxAmount);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#d4af37';
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = 'rgba(212,175,55,0.4)';
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // 数据点（金色圆点+金额标签）
+  days.forEach((d, i) => {
+    const x = padding.left + xStep * i;
+    const y = padding.top + plotH * (1 - d.amount / maxAmount);
+
+    // 外圈
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#0a0a06';
+    ctx.fill();
+    ctx.strokeStyle = '#d4af37';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 内点
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#d4af37';
+    ctx.fill();
+
+    // 金额标签（智能格式：>=10取整，<10保留2位小数）
+    ctx.fillStyle = 'rgba(212,175,55,0.85)';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    var amtLabel = fmtChartVal(d.amount);
+    ctx.fillText('¥' + amtLabel, x, y - 12);
+  });
+
+  // X轴标签
+  days.forEach((d, i) => {
+    const x = padding.left + xStep * i;
+    ctx.fillStyle = 'rgba(200,190,165,0.5)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+
+    // 根据数据点数量动态决定是否跳过部分标签避免拥挤
+    var skipLabel = days.length > 14 ? (i % Math.ceil(days.length / 10) !== 0) : false;
+    if (!skipLabel) ctx.fillText(d.label, x, H - padding.bottom + 18);
+  });
+}
+
+// 渲染最近订单（只显示当天，10条一页，带分页）
+var _dashRecentPage = 1;
+var _dashRecentPageSize = 10;
+
+function renderRecentOrders(orders) {
+  const tbody = document.getElementById('dashTableBody');
+  if (!tbody) return;
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // 只筛选今天的订单（按创建时间）
+  const todayOrders = orders.filter(o => o.createdAt && new Date(o.createdAt) >= todayStart);
+  // 按时间倒序
+  todayOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+  const totalPages = Math.max(1, Math.ceil(todayOrders.length / _dashRecentPageSize));
+  if (_dashRecentPage > totalPages) _dashRecentPage = totalPages;
+  const startIdx = (_dashRecentPage - 1) * _dashRecentPageSize;
+  const pageData = todayOrders.slice(startIdx, startIdx + _dashRecentPageSize);
+
+  if (pageData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:rgba(212,175,55,0.3)">今日暂无订单数据</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = pageData.map(o => {
+    const statusMap = {
+      generated: { text: '订单生成', cls: 'status-pending' },
+      paying: { text: '支付中', cls: 'status-paying' },
+      paid: { text: '支付成功', cls: 'status-paid' },
+      refunded: { text: '已退款', cls: 'status-refunded' },
+      partial_refund: { text: '部分退款', cls: 'status-refunded' }
+    };
+    const si = statusMap[o.status] || { text: o.status, cls: '' };
+    const ct = o.createdAt ? fmtTime(o.createdAt) : '--';
+    return `<tr>
+      <td class="order-no-cell" title="${o.tradeNo || o.outTradeNo || ''}">${o.tradeNo || o.outTradeNo || '--'}</td>
+      <td class="amount-cell">¥${parseFloat(o.amount || 0).toFixed(2)}</td>
+      <td>支付宝扫码</td>
+      <td><span class="status-badge ${si.cls}">${si.text}</span></td>
+      <td class="date-cell">${ct}</td>
+    </tr>`;
+  }).join('');
+
+  // 分页控件
+  renderDashPagination(totalPages, todayOrders.length);
+}
+
+// 最近订单分页
+function renderDashPagination(totalPages, totalItems) {
+  var existing = document.getElementById('dashRecentPager');
+  if (existing) existing.remove();
+
+  if (totalPages <= 1 && totalItems <= _dashRecentPageSize) return; // 不需要分页
+
+  var pagerHtml = '<div id="dashRecentPager" style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:12px;padding:8px 4px;">';
+  var dashStartIdx = (_dashRecentPage - 1) * _dashRecentPageSize;
+  var dashEndIdx = Math.min(dashStartIdx + _dashRecentPageSize, totalItems);
+  var dashItemsThisPage = totalItems === 0 ? 0 : (dashEndIdx - dashStartIdx);
+  pagerHtml += '<span style="color:rgba(200,190,165,0.55);font-size:12px;margin-right:6px;">显示第 ' + _dashRecentPage + '页-' + dashItemsThisPage + '条，共 <span style="color:#d4af37;font-weight:700;">' + totalItems + '</span> 条记录</span>';
+
+  // 上一页
+  pagerHtml += '<button onclick="dashPageChange(' + (_dashRecentPage - 1) + ', ' + totalPages + ')" class="' + (_dashRecentPage <= 1 ? 'page-btn-disabled' : 'page-btn') + '" style="' + (_dashRecentPage <= 1 ? 'opacity:0.35;cursor:not-allowed;' : '') + 'min-width:28px;height:26px;border:1px solid rgba(212,175,55,0.25);border-radius:5px;background:rgba(18,15,8,0.9);color:#d4af37;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">&lt;</button>';
+
+  // 页码
+  var maxShow = 5;
+  var startP = Math.max(1, _dashRecentPage - Math.floor(maxShow / 2));
+  var endP = Math.min(totalPages, startP + maxShow - 1);
+  if (endP - startP < maxShow - 1) startP = Math.max(1, endP - maxShow + 1);
+
+  for (var p = startP; p <= endP; p++) {
+    var isActive = p === _dashRecentPage;
+    pagerHtml += '<button onclick="dashPageChange(' + p + ',' + totalPages + ')" style="min-width:28px;height:26px;border:1px solid ' + (isActive ? '#d4af37' : 'rgba(212,175,55,0.2)') + ';border-radius:5px;background:' + (isActive ? 'rgba(212,175,55,0.15)' : 'rgba(18,15,8,0.9)') + ';color:' + (isActive ? '#f0d77a' : 'rgba(200,190,165,0.6)') + ';font-size:12px;font-weight:' + (isActive ? '700' : '400') + ';cursor:pointer;">' + p + '</button>';
+  }
+
+  // 下一页
+  pagerHtml += '<button onclick="dashPageChange(' + (_dashRecentPage + 1) + ', ' + totalPages + ')" class="' + (_dashRecentPage >= totalPages ? 'page-btn-disabled' : 'page-btn') + '" style="' + (_dashRecentPage >= totalPages ? 'opacity:0.35;cursor:not-allowed;' : '') + 'min-width:28px;height:26px;border:1px solid rgba(212,175,55,0.25);border-radius:5px;background:rgba(18,15,8,0.9);color:#d4af37;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">&gt;</button>';
+  pagerHtml += '</div>';
+
+  var tableWrap = document.querySelector('#dashTableBody').parentElement.parentElement.parentElement;
+  if (tableWrap) tableWrap.insertAdjacentHTML('beforeend', pagerHtml);
+}
+
+function dashPageChange(page, totalPages) {
+  if (page < 1 || page > totalPages) return;
+  _dashRecentPage = page;
+  renderRecentOrders(allOrders);
+}
+
+// 首次加载
+loadDashboard();
+loadSecurityConfig();
+
+// 每10秒自动刷新仪表盘
+setInterval(loadDashboard, 10000);
+
+// ==================== 通用黑金提示弹窗（替代所有alert） ====================
+
+function showAlert(msg, icon) {
+  var el = document.getElementById('alertMessage');
+  if (el) el.textContent = msg;
+  var ic = document.getElementById('alertIcon');
+  if (ic) ic.textContent = icon || '⚠️';
+  document.getElementById('alertOverlay').classList.add('show');
+}
+function closeAlertDialog() {
+  document.getElementById('alertOverlay').classList.remove('show');
+}
+
+// ==================== 通用黑金输入弹窗（替代所有prompt） ====================
+
+let _promptResolve = null;
+function showPrompt(msg) {
+  return new Promise(function(resolve) {
+    _promptResolve = resolve;
+    document.getElementById('promptMessage').textContent = msg;
+    document.getElementById('promptInput').value = '';
+    document.getElementById('promptOverlay').classList.add('show');
+    setTimeout(function() {
+      var el = document.getElementById('promptInput');
+      if (el) el.focus();
+    }, 200);
+  });
+}
+function closePromptDialog(ok) {
+  document.getElementById('promptOverlay').classList.remove('show');
+  if (_promptResolve) {
+    _promptResolve(ok ? document.getElementById('promptInput').value : null);
+    _promptResolve = null;
+  }
+}
+
+// ==================== 安全设置页面 ====================
+
+let securityData = { hasPassword: false, skipPassword: false };
+// verifyAttemptsLeft/verifyAttemptsFailed: 安全验证尝试计数
+let verifyAttemptsLeft = 3;
+let verifyAttemptsFailed = 0;
+
+// 页面内修改登录密码
+async function submitChangePwdFromPage() {
+  const oldPwd = document.getElementById('secSetOldPwd').value.trim();
+  const newPwd1 = document.getElementById('secSetNewPwd1').value.trim();
+  const newPwd2 = document.getElementById('secSetNewPwd2').value.trim();
+
+  if (!oldPwd) {
+    alert('请输入原密码');
+    return;
+  }
+  if (!newPwd1 || newPwd1.length < 6) {
+    alert('新密码长度不能少于6位');
+    return;
+  }
+  if (newPwd1 !== newPwd2) {
+    alert('两次输入的新密码不一致');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/login/change-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': getToken()
+      },
+      body: JSON.stringify({
+        oldPassword: oldPwd,
+        newPassword: newPwd1,
+        confirmPassword: newPwd2
+      })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      alert('登录密码修改成功！');
+      document.getElementById('secSetOldPwd').value = '';
+      document.getElementById('secSetNewPwd1').value = '';
+      document.getElementById('secSetNewPwd2').value = '';
+    } else {
+      alert(json.message || '修改失败');
+    }
+  } catch (e) {
+    alert('修改失败：' + e.message);
+  }
+}
+
+// 页面内设置二级安全密码
+async function setSecurityPassword2() {
+  const pwd1 = document.getElementById('secNewPassword1_2').value.trim();
+  const pwd2 = document.getElementById('secNewPassword2_2').value.trim();
+  if (!pwd1 || pwd1.length < 4) {
+    alert('安全密码长度不能少于4位');
+    return;
+  }
+  if (pwd1 !== pwd2) {
+    alert('两次输入的安全密码不一致');
+    return;
+  }
+  try {
+    const res = await fetch('/api/security/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': getToken() },
+      body: JSON.stringify({ password: pwd1 })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      alert('安全密码设置成功！');
+      document.getElementById('secNewPassword1_2').value = '';
+      document.getElementById('secNewPassword2_2').value = '';
+      loadSecurityConfig();
+      loadSecurityConfig2();
+    } else {
+      alert(json.message || '设置失败');
+    }
+  } catch (e) {
+    alert('设置失败：' + e.message);
+  }
+}
+
+// 页面内修改二级安全密码
+async function changeSecurityPassword2() {
+  const oldPwd = document.getElementById('secOldPassword_2').value.trim();
+  const newPwd1 = document.getElementById('secChgNewPwd1_2').value.trim();
+  const newPwd2 = document.getElementById('secChgNewPwd2_2').value.trim();
+  if (!oldPwd) {
+    alert('请输入原安全密码');
+    return;
+  }
+  if (!newPwd1 || newPwd1.length < 4) {
+    alert('新安全密码长度不能少于4位');
+    return;
+  }
+  if (newPwd1 !== newPwd2) {
+    alert('两次输入的新安全密码不一致');
+    return;
+  }
+  try {
+    const res = await fetch('/api/security/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': getToken() },
+      body: JSON.stringify({ oldPassword: oldPwd, password: newPwd1 })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      alert('安全密码修改成功！');
+      document.getElementById('secOldPassword_2').value = '';
+      document.getElementById('secChgNewPwd1_2').value = '';
+      document.getElementById('secChgNewPwd2_2').value = '';
+      loadSecurityConfig();
+      loadSecurityConfig2();
+    } else {
+      alert(json.message || '修改失败');
+    }
+  } catch (e) {
+    alert('修改失败：' + e.message);
+  }
+}
+
+// 加载页面内安全配置（安全设置页面用）
+async function loadSecurityConfig2() {
+  try {
+    const res = await fetch('/api/security');
+    const json = await res.json();
+    if (json.code === 'OK') {
+      const hasPwd = json.data.hasPassword;
+      document.getElementById('secPwdNewForm2').style.display = hasPwd ? 'none' : 'block';
+      document.getElementById('secPwdChangeForm2').style.display = hasPwd ? 'block' : 'none';
+      document.getElementById('secPwdStatus2').style.display = hasPwd ? 'block' : 'none';
+    }
+  } catch (e) { console.error('加载安全配置失败:', e); }
+}
+
+// 加载安全配置
+async function loadSecurityConfig() {
+  try {
+    const res = await fetch('/api/security');
+    const json = await res.json();
+    if (json.code === 'OK') {
+      securityData = json.data;
+      updateSecurityUI();
+    }
+  } catch (e) { console.error('加载安全配置失败:', e); }
+}
+
+// 更新安全设置UI状态
+function updateSecurityUI() {
+  const hasPwd = securityData.hasPassword;
+  document.getElementById('secPwdNewForm').style.display = hasPwd ? 'none' : 'block';
+  document.getElementById('secPwdChangeForm').style.display = hasPwd ? 'block' : 'none';
+  document.getElementById('secPwdStatus').style.display = hasPwd ? 'block' : 'none';
+
+  const sw = document.getElementById('skipSwitch');
+  if (securityData.skipPassword) {
+    sw.classList.add('on');
+  } else {
+    sw.classList.remove('on');
+  }
+
+  // 加载商户信息到输入框和导航栏
+  var mName = securityData.merchantName || '';
+  var mContact = securityData.merchantContact || '';
+  var mPhone = securityData.merchantPhone || '';
+  var nameInput = document.getElementById('merchantNameInput');
+  var contactInput = document.getElementById('merchantContactInput');
+  var phoneInput = document.getElementById('merchantPhoneInput');
+  if (nameInput) { nameInput.value = mName; }
+  if (contactInput) { contactInput.value = mContact; }
+  if (phoneInput) { phoneInput.value = mPhone; }
+  var topName = document.getElementById('topNavMerchantName');
+  var topAvatar = document.getElementById('topNavAvatar');
+  if (topName && mName) { topName.textContent = mName; }
+  if (topAvatar && mName) { topAvatar.textContent = mName.charAt(0); }
+
+  // 渲染收款二维码
+  renderMerchantQRCode();
+}
+
+// 渲染商户管理页面的收款二维码（指向收银台）
+// 圆角矩形辅助函数
+function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+  if (typeof r === 'undefined') r = 5;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+// 商户收款二维码渲染（使用qrcodejs库，CDN: cdnjs.cloudflare.com）
+var _merchantQrDataUrl = '';  // 缓存生成的二维码dataURL
+var _merchantQrInstance = null;  // qrcodejs实例
+
+function renderMerchantQRCode() {
+  var box = document.getElementById('merchantQrCodeBox');
+  if (!box) return;
+
+  // 显示加载中
+  box.innerHTML = '<img id="merchantQrImg" style="display:block;width:200px;height:200px;border-radius:8px;" alt="收款二维码" src="data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect fill="#fff" width="200" height="200" rx="8"/><text x="100" y="95" text-anchor="middle" fill="#b8860b" font-size="13" font-family="sans-serif">加载中...</text><text x="100" y="115" text-anchor="middle" fill="#d4af37" font-size="11" font-family="sans-serif">正在生成收款码</text></svg>') + '">';
+
+  // 检查qrcodejs库是否加载
+  if (typeof QRCode === 'undefined') {
+    if (!renderMerchantQRCode._retries) renderMerchantQRCode._retries = 0;
+    renderMerchantQRCode._retries++;
+    if (renderMerchantQRCode._retries <= 30) {
+      setTimeout(renderMerchantQRCode, 300);
+      return;
+    }
+    var errImg = document.getElementById('merchantQrImg');
+    if (errImg) errImg.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect fill="#fff" width="200" height="200" rx="8"/><text x="100" y="96" text-anchor="middle" fill="#cc3333" font-size="12" font-family="sans-serif">二维码加载失败</text><text x="100" y="114" text-anchor="middle" fill="#999" font-size="10" font-family="sans-serif">请检查网络后刷新</text></svg>');
+    return;
+  }
+
+  renderMerchantQRCode._retries = 0;
+
+  // 清除旧实例
+  if (_merchantQrInstance) { try { _merchantQrInstance.clear(); } catch(e){} _merchantQrInstance = null; }
+  box.innerHTML = '';  // 清空容器
+
+  var cashierUrl = window.location.origin.replace(/\/$/, '') + '/cashier.html';
+
+  // qrcodejs API：直接在容器内创建
+  _merchantQrInstance = new QRCode(box, {
+    text: cashierUrl,
+    width: 200,
+    height: 200,
+    colorDark: '#b8860b',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.H
+  });
+
+  // 延迟缓存生成的图片URL（用于下载功能），并在中心叠加 Logo
+  setTimeout(function() {
+    var img = box.querySelector('img');
+    if (img && img.src) { _merchantQrDataUrl = img.src; }
+    else {
+      var canvas = box.querySelector('canvas');
+      if (canvas) { _merchantQrDataUrl = canvas.toDataURL('image/png'); }
+    }
+    // 在二维码中心叠加 Logo（不影响扫码，H级纠错可容忍30%遮挡）
+    if (!box.querySelector('.qr-logo-overlay')) {
+      var overlay = document.createElement('div');
+      overlay.className = 'qr-logo-overlay';
+      overlay.innerHTML = '<div class="qr-logo-inner"><img src="logo-pay.png" alt="logo"></div>';
+      box.style.position = 'relative';
+      box.appendChild(overlay);
+    }
+  }, 500);
+}
+
+// 下载商户收款二维码图片（生成完整面板截图）
+function downloadMerchantQRImage() {
+  if (!_merchantQrDataUrl) { showAlert('二维码尚未生成完成，请稍后再试'); return; }
+
+  var panelCanvas = document.createElement('canvas');
+  var w = 300, h = 500;
+  panelCanvas.width = w;
+  panelCanvas.height = h;
+  var ctx = panelCanvas.getContext('2d');
+
+  // 同时加载 logo 和二维码，两个都加载完毕后一起绘制
+  var loadedCount = 0;
+  var logoImg = new Image();
+  var qrImg = new Image();
+
+  function onAllLoaded() {
+    // ====== 背景 ======
+    var bgGrad = ctx.createLinearGradient(0, 0, w, h);
+    bgGrad.addColorStop(0, '#121008');
+    bgGrad.addColorStop(1, '#161308');
+    ctx.fillStyle = bgGrad;
+    roundRect(ctx, 0, 0, w, h, 16, true, false);
+
+    // 金色边框
+    ctx.strokeStyle = 'rgba(212,175,55,0.25)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, 1, 1, w-2, h-2, 15, false, true);
+
+    // ====== Logo 圆形区域（绘制真实 logo） ======
+    var ls = 36, lx = w/2 - ls/2, ly = 30;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(w/2, ly+ls/2, ls/2, 0, Math.PI*2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = '#121008';
+    ctx.fill();
+    try { ctx.drawImage(logoImg, lx+3, ly+3, ls-6, ls-6); } catch(e) {}
+    ctx.restore();
+    // 金色圆环边框
+    ctx.beginPath();
+    ctx.arc(w/2, ly+ls/2, ls/2, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(212,175,55,0.5)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // ====== 品牌名 ======
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillStyle = '#f0d77a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('黑金PAY', w/2, 105);
+
+    // slogan
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = 'rgba(212,175,55,0.5)';
+    ctx.fillText('安全收款 · 即时到账', w/2, 126);
+
+    // badge
+    var bW=130,bH=26,bX=(w-bW)/2,bY=144;
+    ctx.fillStyle='rgba(30,26,16,0.9)';
+    roundRect(ctx,bX,bY,bW,bH,13,true,false);
+    ctx.strokeStyle='rgba(212,175,55,0.3)';
+    ctx.lineWidth=1;
+    roundRect(ctx,bX,bY,bW,bH,13,false,true);
+    ctx.font='11px sans-serif';
+    ctx.fillStyle='rgba(212,175,55,0.7)';
+    ctx.fillText('🔒 支付宝实时交易', w/2, bY+bH/2+1);
+
+    // 标题
+    ctx.font='bold 15px sans-serif';
+    ctx.fillStyle='#d4af37';
+    ctx.fillText('收款二维码', w/2, 198);
+
+    // 二维码白底框（适中大小）
+    var qbx=(w-220)/2,qby=220,qbs=220;
+    ctx.fillStyle='#ffffff';
+    roundRect(ctx,qbx,qby,qbs,qbs,14,true,false);
+
+    // 绘制二维码（四周留白 22px）
+    try { ctx.drawImage(qrImg, qbx+22, qby+22, 176, 176); } catch(e) {}
+
+    // 二维码中心 Logo（不影响扫码，H级纠错可容忍30%遮挡）
+    var logoSize = 40;
+    var logoCX = qbx + 22 + 176/2;
+    var logoCY = qby + 22 + 176/2;
+    // 白底圆
+    ctx.beginPath();
+    ctx.arc(logoCX, logoCY, logoSize/2 + 4, 0, Math.PI*2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    // 金色圆环
+    ctx.beginPath();
+    ctx.arc(logoCX, logoCY, logoSize/2 + 2, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(212,175,55,0.6)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // 绘制 logo 图片
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(logoCX, logoCY, logoSize/2 - 1, 0, Math.PI*2);
+    ctx.closePath();
+    ctx.clip();
+    try { ctx.drawImage(logoImg, logoCX - logoSize/2 + 1, logoCY - logoSize/2 + 1, logoSize - 2, logoSize - 2); } catch(e) {}
+    ctx.restore();
+
+    // 底部提示（只保留一行）
+    ctx.font='13px sans-serif';
+    ctx.fillStyle='rgba(212,175,55,0.45)';
+    ctx.fillText('使用支付宝扫一扫完成支付', w/2, qby+qbs+26);
+
+    // 导出下载
+    var link = document.createElement('a');
+    link.download = '黑金PAY_收款码.png';
+    link.href = panelCanvas.toDataURL('image/png');
+    link.click();
+  }
+
+  logoImg.onload = function() { loadedCount++; if (loadedCount === 2) onAllLoaded(); };
+  logoImg.onerror = function() { loadedCount++; if (loadedCount === 2) onAllLoaded(); };
+
+  qrImg.onload = function() { loadedCount++; if (loadedCount === 2) onAllLoaded(); };
+  qrImg.onerror = function() { loadedCount++; if (loadedCount === 2) onAllLoaded(); };
+
+  logoImg.src = 'logo-pay.png';
+  qrImg.src = _merchantQrDataUrl;
+}
+
+// ==================== 页面切换导航 ====================
+
+let currentNavPage = '';
+
+function switchPage(page) {
+  if (page === currentNavPage) return;
+  currentNavPage = page;
+  // 记住当前页面，刷新后恢复
+  try { localStorage.setItem('admin_active_page', page); } catch(e) {}
+
+  var mainPage = document.getElementById('mainPage');
+  var secPage = document.getElementById('securityPage');
+  var ordersPage = document.getElementById('ordersPage');
+  var navHome = document.getElementById('navHome');
+  var navManage = document.getElementById('navManage');
+  var navOrders = document.getElementById('navOrders');
+  var navLimits = document.getElementById('navLimits');
+
+  // 隐藏所有页面
+  mainPage.style.display = 'none';
+  secPage.classList.remove('show');
+  if (ordersPage) ordersPage.style.display = 'none';
+  var limitsPage = document.getElementById('limitsPage');
+  if (limitsPage) limitsPage.style.display = 'none';
+  if (navHome) navHome.classList.remove('active');
+  if (navManage) navManage.classList.remove('active');
+  if (navOrders) navOrders.classList.remove('active');
+  if (navLimits) navLimits.classList.remove('active');
+  document.body.style.overflow = '';
+
+  if (page === 'home') {
+    mainPage.style.display = '';
+    if (navHome) navHome.classList.add('active');
+    loadDashboard();
+  } else if (page === 'manage') {
+    secPage.classList.add('show');
+    if (navManage) navManage.classList.add('active');
+    // 延迟渲染二维码，确保页面可见后canvas有正确尺寸
+    setTimeout(function() { renderMerchantQRCode(); }, 100);
+  } else if (page === 'orders') {
+    if (ordersPage) ordersPage.style.display = '';
+    if (navOrders) navOrders.classList.add('active');
+    loadOrders();
+  } else if (page === 'limits') {
+    document.getElementById('limitsPage').style.display = '';
+    if (navLimits) navLimits.classList.add('active');
+    loadLimitsConfig();
+  } else if (page === 'security') {
+    var secSetPage = document.getElementById('securitySetPage');
+    if (secSetPage) secSetPage.style.display = '';
+    var navSecurity = document.getElementById('navSecurity');
+    if (navSecurity) navSecurity.classList.add('active');
+    loadSecurityConfig();
+    loadSecurityConfig2();
+  }
+}
+
+// ===== 安全设置overlay（独立弹窗） =====
+function openSecurityOverlay() {
+  loadSecurityConfig();
+  document.getElementById('securityOverlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSecurityOverlay() {
+  document.getElementById('securityOverlay').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+// ==================== 限额设置 ====================
+function stepLimitInput(id, delta, isAmount) {
+  var input = document.getElementById(id);
+  var cur = parseFloat(input.value) || 0;
+  var next = isAmount ? Math.round((cur + delta) * 100) / 100 : Math.round(cur + delta);
+  if (next < 0) next = 0;
+  input.value = next > 0 ? next : '';
+}
+
+function openLimitsResetConfirm() {
+  document.getElementById('limitsResetOverlay').classList.add('show');
+}
+function closeLimitsResetConfirm() {
+  document.getElementById('limitsResetOverlay').classList.remove('show');
+}
+function confirmLimitsReset() {
+  ['limitMinAmount','limitMaxAmount','limitDayCount','limitDayAmount','limitMonthCount','limitMonthAmount'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  closeLimitsResetConfirm();
+  // 同步清空后端限额配置
+  fetch('/api/limits', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ minAmount: '', maxAmount: '', dayCount: '', dayAmount: '', monthCount: '', monthAmount: '' })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.success) {
+      showAlert('✅ 限额已重置，收银台不再限制交易');
+    }
+  }).catch(function() {});
+}
+
+
+// ===== 限额设置 =====
+function loadLimitsConfig() {
+  fetch('/api/limits').then(function(r) { return r.json(); }).then(function(data) {
+    var c = data.data || data.config || {};
+    if (c.minAmount !== null && c.minAmount !== undefined)
+      document.getElementById('limitMinAmount').value = c.minAmount;
+    if (c.maxAmount !== null && c.maxAmount !== undefined)
+      document.getElementById('limitMaxAmount').value = c.maxAmount;
+    if (c.dayCount !== null && c.dayCount !== undefined)
+      document.getElementById('limitDayCount').value = c.dayCount;
+    if (c.dayAmount !== null && c.dayAmount !== undefined)
+      document.getElementById('limitDayAmount').value = c.dayAmount;
+    if (c.monthCount !== null && c.monthCount !== undefined)
+      document.getElementById('limitMonthCount').value = c.monthCount;
+    if (c.monthAmount !== null && c.monthAmount !== undefined)
+      document.getElementById('limitMonthAmount').value = c.monthAmount;
+  }).catch(function() {});
+}
+
+function saveLimitsConfig() {
+  var btn = document.getElementById('saveLimitsBtn');
+  btn.disabled = true; btn.textContent = '提交中...';
+
+  var config = {
+    minAmount: document.getElementById('limitMinAmount').value,
+    maxAmount: document.getElementById('limitMaxAmount').value,
+    dayCount: document.getElementById('limitDayCount').value,
+    dayAmount: document.getElementById('limitDayAmount').value,
+    monthCount: document.getElementById('limitMonthCount').value,
+    monthAmount: document.getElementById('limitMonthAmount').value
+  };
+
+  fetch('/api/limits', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  }).then(function(r) { return r.json();   }).then(function(data) {
+    btn.disabled = false; btn.textContent = '提交保存';
+    if (data.success || data.code === 'OK') {
+      showLimitSuccess();
+    } else {
+      showAlert(data.error || data.message || '保存失败，请重试');
+    }
+  }).catch(function(e) {
+    btn.disabled = false; btn.textContent = '提交保存';
+    showAlert('网络错误：' + e.message);
+  });
+}
+
+function showLimitSuccess() {
+  var ov = document.createElement('div');
+  ov.className = 'modal-overlay show';
+  ov.id = 'limitSuccessOverlay';
+  ov.innerHTML =
+    '<div class="modal-dialog" style="text-align:center;">' +
+      '<div style="font-size:48px;margin-bottom:12px;">✅</div>' +
+      '<div class="modal-title success-title" style="justify-content:center;font-size:17px;">限额设置成功</div>' +
+      '<p style="color:rgba(200,190,165,0.7);font-size:13px;margin-bottom:22px;line-height:1.8;">已成功更新交易限额配置</p>' +
+      '<button class="btn-primary" style="padding:10px 40px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:none;letter-spacing:2px;" onclick="closeLimitSuccess()">确 定</button>' +
+    '</div>';
+  document.body.appendChild(ov);
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLimitSuccess() {
+  var ov = document.getElementById('limitSuccessOverlay');
+  if (ov) { ov.remove(); document.body.style.overflow = ''; }
+}
+
+// 设置新安全密码（首次）
+async function setSecurityPassword() {
+  const p1 = document.getElementById('secNewPassword1').value.trim();
+  const p2 = document.getElementById('secNewPassword2').value.trim();
+  if (!p1 || p1.length < 4) { showAlert('安全密码至少4位'); return; }
+  if (p1 !== p2) { showAlert('两次输入的密码不一致'); return; }
+
+  try {
+    const res = await fetch('/api/security/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPassword: p1, confirmPassword: p2 })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      showAlert(json.message);
+      document.getElementById('secNewPassword1').value = '';
+      document.getElementById('secNewPassword2').value = '';
+      loadSecurityConfig();
+    } else {
+      showAlert('设置失败：' + json.message);
+    }
+  } catch (e) { showAlert('请求异常：' + e.message); }
+}
+
+// 修改已存在的安全密码
+async function changeSecurityPassword() {
+  const oldP = document.getElementById('secOldPassword').value.trim();
+  const p1 = document.getElementById('secChgNewPwd1').value.trim();
+  const p2 = document.getElementById('secChgNewPwd2').value.trim();
+  if (!oldP) { showAlert('请输入原密码'); return; }
+  if (!p1 || p1.length < 4) { showAlert('新密码至少4位'); return; }
+  if (p1 !== p2) { showAlert('两次输入的新密码不一致'); return; }
+
+  try {
+    const res = await fetch('/api/security/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldPassword: oldP, newPassword: p1, confirmPassword: p2 })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      showAlert(json.message);
+      document.getElementById('secOldPassword').value = '';
+      document.getElementById('secChgNewPwd1').value = '';
+      document.getElementById('secChgNewPwd2').value = '';
+      loadSecurityConfig();
+    } else {
+      showAlert('修改失败：' + json.message);
+    }
+  } catch (e) { showAlert('请求异常：' + e.message); }
+}
+
+// 切换免密退款模式
+async function toggleSkipMode(e) {
+  e.stopPropagation();
+
+  if (!securityData.hasPassword) {
+    showAlert('请先设置二级安全密码');
+    return;
+  }
+
+  const newState = !securityData.skipPassword;
+
+  // 需要验证当前密码才能切换
+  const pwd = await showPrompt(newState ? '请输入当前安全密码以开启免密退款：' : '请输入当前安全密码以关闭免密退款：');
+  if (!pwd) return;
+
+  try {
+    const res = await fetch('/api/security/skip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd, enable: newState })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      securityData.skipPassword = json.skipPassword;
+      updateSecurityUI();
+      showAlert(json.message);
+    } else {
+      showAlert(json.message);
+    }
+  } catch (e) { showAlert('请求异常：' + e.message); }
+}
+
+// ==================== 二级密码验证弹窗（退款前触发） ====================
+
+// 打开密码验证弹窗（替代直接打开退款弹窗）
+function openPwdVerify(outTradeNo, amount) {
+  // 存储订单信息到 DOM 隐藏字段（不依赖全局变量）
+  document.getElementById('_verifyOutTradeNo').value = outTradeNo;
+  document.getElementById('_verifyAmount').value = amount;
+  verifyAttemptsLeft = 3;
+  verifyAttemptsFailed = 0;
+  updateAttemptInfo();
+  document.getElementById('verifyPwdInput').value = '';
+  document.getElementById('pwdVerifyOverlay').classList.add('show');
+  setTimeout(function() { document.getElementById('verifyPwdInput').focus(); }, 200);
+}
+
+function closePwdVerify() {
+  document.getElementById('pwdVerifyOverlay').classList.remove('show');
+  document.getElementById('_verifyOutTradeNo').value = '';
+  document.getElementById('_verifyAmount').value = '';
+}
+
+function updateAttemptInfo() {
+  document.getElementById('attemptInfo').textContent =
+    '剩余机会：' + verifyAttemptsLeft + '/3 \u00a0 已输错：' + verifyAttemptsFailed + '次';
+}
+
+// 提交密码验证
+async function submitVerifyPwd() {
+  const pwd = document.getElementById('verifyPwdInput').value;
+  if (!pwd) { showAlert('请输入安全密码'); return; }
+
+  // 从 DOM 隐藏字段读取订单信息（不依赖全局变量）
+  const outTradeNo = document.getElementById('_verifyOutTradeNo').value;
+  const amount = document.getElementById('_verifyAmount').value;
+
+  if (!outTradeNo || !amount) {
+    showAlert('订单信息丢失，请重新点击退款按钮');
+    closePwdVerify();
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/security/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    });
+    const json = await res.json();
+
+    if (json.verified) {
+      closeAlertDialog();
+      closePwdVerify();
+      // 验证通过 → 打开原退款弹窗
+      openRefundModal(outTradeNo, amount);
+    } else {
+      verifyAttemptsLeft--;
+      verifyAttemptsFailed++;
+      updateAttemptInfo();
+      document.getElementById('verifyPwdInput').value = '';
+
+      if (verifyAttemptsLeft <= 0) {
+        showAlert('已达到最大尝试次数，本次退款操作已取消');
+        closePwdVerify();
+      } else {
+        showAlert('密码错误！剩余 ' + verifyAttemptsLeft + ' 次机会');
+        document.getElementById('verifyPwdInput').focus();
+      }
+    }
+  } catch (e) {
+    showAlert('验证异常：' + e.message);
+  }
+}
+
+// ==================== 忘记密码 - 重置弹窗 ====================
+
+function openResetPwdModal() {
+  document.getElementById('resetPayPwd').value = '';
+  document.getElementById('resetNewPwd1').value = '';
+  document.getElementById('resetNewPwd2').value = '';
+  document.getElementById('resetPwdOverlay').classList.add('show');
+}
+
+function closeResetPwdModal() {
+  document.getElementById('resetPwdOverlay').classList.remove('show');
+}
+
+async function submitResetPwd() {
+  const payPwd = document.getElementById('resetPayPwd').value.trim();
+  const np1 = document.getElementById('resetNewPwd1').value.trim();
+  const np2 = document.getElementById('resetNewPwd2').value.trim();
+
+  if (!payPwd || payPwd.length < 6) { showAlert('请输入有效的支付宝支付密码'); return; }
+  if (!np1 || np1.length < 4) { showAlert('新安全密码至少4位'); return; }
+  if (np1 !== np2) { showAlert('两次输入的新密码不一致'); return; }
+
+  try {
+    const res = await fetch('/api/security/reset-by-paypwd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payPassword: payPwd, newPassword: np1, confirmPassword: np2 })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      showAlert(json.message);
+      closeResetPwdModal();
+      // 如果是从验证弹窗进入的，关闭后也关闭验证弹窗
+      closePwdVerify();
+      loadSecurityConfig();
+    } else {
+      showAlert('重置失败：' + json.message);
+    }
+  } catch (e) { showAlert('请求异常：' + e.message); }
+}
+
+// 点击遮罩关闭弹窗
+document.addEventListener('DOMContentLoaded', async function() {
+  // 从 URL 参数恢复 token（商户管理系统登录跳转时通过 ?token= 参数传递）
+  try {
+    const urlParams = new URLSearchParams(location.search);
+    const urlToken = urlParams.get('token');
+    if (urlToken) {
+      sessionStorage.setItem(TOKEN_KEY, urlToken);
+      // 清除 URL 参数，避免 token 泄露
+      const cleanUrl = location.pathname;
+      history.replaceState(null, '', cleanUrl);
+    }
+  } catch(e) {}
+
+  // 先检查登录状态
+  const loggedIn = await checkLoginStatus();
+  if (!loggedIn) return; // 未登录已跳转
+
+  // 初始化页面状态：恢复上次访问的页面（默认主页）
+  var savedPage = 'home';
+  try { savedPage = localStorage.getItem('admin_active_page') || 'home'; } catch(e) {}
+  if (!['home','manage','orders','limits','security'].includes(savedPage)) savedPage = 'home';
+  switchPage(savedPage);
+
+  // 商户名称输入框 → 同步右上角导航栏商户名+头像首字 + 防抖保存到服务端
+  var nameInput = document.getElementById('merchantNameInput');
+  var merchantSaveTimer = null;
+  if (nameInput) {
+    nameInput.addEventListener('input', function() {
+      var val = this.value.trim();
+      var topName = document.getElementById('topNavMerchantName');
+      var topAvatar = document.getElementById('topNavAvatar');
+      if (topName) topName.textContent = val || '商户';
+      if (topAvatar) topAvatar.textContent = (val && val.length > 0) ? val.charAt(0) : '商';
+    // 防抖保存到服务端
+    clearTimeout(merchantSaveTimer);
+    merchantSaveTimer = setTimeout(function() {
+      fetch('/api/security/merchant-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: val }),
+      }).catch(function(e) { console.error('保存商户名称失败:', e); });
+    }, 500);
+  });
+}
+
+// 联系人姓名/手机号输入框 → 防抖保存到服务端
+var contactInput = document.getElementById('merchantContactInput');
+var phoneInput = document.getElementById('merchantPhoneInput');
+var contactSaveTimer = null;
+function saveMerchantInfo() {
+  clearTimeout(contactSaveTimer);
+  contactSaveTimer = setTimeout(function() {
+    fetch('/api/security/merchant-info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        merchantContact: (contactInput && contactInput.value) ? contactInput.value.trim() : '',
+        merchantPhone: (phoneInput && phoneInput.value) ? phoneInput.value.trim() : ''
+      }),
+    }).catch(function(e) { console.error('保存商户联系信息失败:', e); });
+  }, 500);
+}
+if (contactInput) {
+  contactInput.addEventListener('input', saveMerchantInfo);
+}
+if (phoneInput) {
+  phoneInput.addEventListener('input', saveMerchantInfo);
+}
+
+  document.getElementById('pwdVerifyOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closePwdVerify();
+  });
+  document.getElementById('resetPwdOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeResetPwdModal();
+  });
+  document.getElementById('alertOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeAlertDialog();
+  });
+  document.getElementById('promptOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closePromptDialog(false);
+  });
+});
+
+/* 增减按钮长按连续调整 */
+(function() {
+  var activeTimer = null;
+  var activeInterval = null;
+
+  function doStep(btn) {
+    var target = btn.getAttribute('data-target');
+    var delta = parseFloat(btn.getAttribute('data-delta'));
+    var isAmount = btn.getAttribute('data-is-amount') === 'true';
+    var input = document.getElementById(target);
+    if (!input) return;
+    var cur = parseFloat(input.value) || 0;
+    var next = isAmount ? Math.round((cur + delta) * 100) / 100 : Math.round(cur + delta);
+    if (next < 0) next = 0;
+    input.value = next > 0 ? next : '';
+  }
+
+  function startLongPress(btn) {
+    doStep(btn);
+  }
+
+  function stopLongPress() {
+    clearTimeout(activeTimer);
+    clearInterval(activeInterval);
+    activeTimer = null;
+    activeInterval = null;
+  }
+
+  // 使用事件委托，支持动态元素
+  document.addEventListener('mousedown', function(e) {
+    var btn = e.target.closest('.num-btn');
+    if (!btn) return;
+    e.preventDefault();
+    startLongPress(btn);
+  }, true);
+  document.addEventListener('touchstart', function(e) {
+    var btn = e.target.closest('.num-btn');
+    if (!btn) return;
+    startLongPress(btn);
+  }, { passive: false, capture: true });
+
+  function stopHandler(e) {
+    if (activeTimer || activeInterval) stopLongPress();
+  }
+  document.addEventListener('mouseup', stopHandler, true);
+  document.addEventListener('touchend', stopHandler, true);
+  document.addEventListener('touchcancel', stopHandler, true);
+})();
+
+</script>
+
+</body>
+</html>

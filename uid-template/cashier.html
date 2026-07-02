@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>收银台 UID - 黑金PAY</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  /* ===== 黑金流光全局滚动条 ===== */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0f0f0f; }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #f0d77a, #d4af37);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #fff5cc, #f0d77a); }
+  * { scrollbar-width: thin; scrollbar-color: #d4af37 #0f0f0f; }
+  html, body {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    font-weight: bold;
+    background: #0a0a0a;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 16px;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* ===== 黑金流光背景 ===== */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background:
+      radial-gradient(ellipse at 20% 20%, rgba(212,175,55,0.12) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(180,140,30,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 60% 10%, rgba(255,215,0,0.06) 0%, transparent 40%);
+    animation: bgFlow 15s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+  @keyframes bgFlow {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    33%      { transform: translate(-2%, 2%) rotate(1deg); }
+    66%      { transform: translate(2%, -1%) rotate(-1deg); }
+  }
+
+  /* 流光线条 */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      linear-gradient(105deg, transparent 40%, rgba(212,175,55,0.03) 45%, transparent 50%);
+    animation: lightSweep 8s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+  @keyframes lightSweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* ===== 主卡片 ===== */
+  .cashier-card {
+    background: rgba(18,18,18,0.92);
+    border-radius: 24px;
+    border: 1px solid rgba(212,175,55,0.25);
+    box-shadow:
+      0 24px 80px rgba(0,0,0,0.7),
+      0 0 40px rgba(212,175,55,0.06),
+      inset 0 1px 0 rgba(212,175,55,0.1);
+    width: 100%;
+    max-width: 420px;
+    overflow: visible;
+    animation: cardIn 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    position: relative;
+    z-index: 1;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    /* 防止卡片高度超出屏幕时被截断 */
+    flex-shrink: 0;
+  }
+  @keyframes cardIn {
+    from { opacity:0; transform: translateY(40px) scale(0.96); }
+    to   { opacity:1; transform: translateY(0) scale(1); }
+  }
+
+  /* 卡片顶部流光线 */
+  .cashier-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 5%; right: 5%; height: 2px;
+    background: linear-gradient(90deg, transparent, #d4af37, transparent);
+    box-shadow: 0 0 12px rgba(212,175,55,0.4);
+  }
+
+  /* ===== 顶部品牌区 ===== */
+  .merchant-header {
+    padding: 28px 28px 20px;
+    text-align: center;
+    position: relative;
+    background: linear-gradient(180deg, rgba(212,175,55,0.08) 0%, transparent 70%);
+  }
+  /* QR 展示时头部紧凑 */
+  .merchant-header.compact {
+    padding: 16px 20px 12px;
+  }
+  .merchant-header.compact .logo-wrap {
+    width: 52px; height: 52px;
+    margin-bottom: 8px;
+    border-radius: 14px;
+  }
+  .merchant-header.compact .brand-name {
+    font-size: 17px;
+    letter-spacing: 3px;
+  }
+  .merchant-header.compact .merchant-desc {
+    font-size: 11px;
+  }
+  .merchant-header.compact .alipay-badge {
+    padding: 3px 10px;
+    font-size: 10px;
+    margin-top: 8px;
+  }
+  .logo-wrap {
+    width: 72px; height: 72px;
+    margin: 0 auto 14px;
+    border-radius: 20px;
+    overflow: hidden;
+    border: 2px solid rgba(212,175,55,0.35);
+    box-shadow: 0 8px 32px rgba(212,175,55,0.2), 0 0 20px rgba(212,175,55,0.08);
+    animation: logoFloat 4s ease-in-out infinite;
+  }
+  @keyframes logoFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-4px); }
+  }
+  .logo-wrap img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .brand-name {
+    font-size: 22px; font-weight: 800;
+    letter-spacing: 4px;
+    background: linear-gradient(135deg, #f0d77a 0%, #d4af37 35%, #b8860b 65%, #f0d77a 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 4px;
+    text-shadow: none;
+  }
+  .merchant-desc {
+    font-size: 12px;
+    color: rgba(212,175,55,0.6);
+    letter-spacing: 2px;
+  }
+  .alipay-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(212,175,55,0.1);
+    border: 1px solid rgba(212,175,55,0.2);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 11px;
+    color: rgba(212,175,55,0.75);
+    margin-top: 12px;
+  }
+
+  /* ===== 输入区域 ===== */
+  .amount-section {
+    padding: 24px 24px 16px;
+    text-align: center;
+  }
+  .amount-label {
+    font-size: 13px; color: rgba(212,175,55,0.55);
+    margin-bottom: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .amount-input-wrap {
+    display: flex; align-items: baseline;
+    justify-content: center;
+    gap: 2px;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  .amount-yen {
+    font-size: 36px; font-weight: 700;
+    background: linear-gradient(135deg, #d4af37, #f0d77a);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+  .amount-input {
+    border: none; outline: none;
+    font-size: 46px; font-weight: 800;
+    width: 220px;
+    text-align: center;
+    background: transparent;
+    border-bottom: 2px solid rgba(212,175,55,0.25);
+    transition: all 0.3s;
+    font-family: inherit;
+    color: #f0d77a;
+    padding-right: 38px;
+    padding-bottom: 4px;
+  }
+  .amount-input:focus {
+    border-bottom-color: #d4af37;
+    box-shadow: 0 4px 16px rgba(212,175,55,0.12);
+  }
+  .amount-input::placeholder {
+    color: rgba(212,175,55,0.25);
+    font-weight: 700;
+  }
+  .amount-input::-webkit-outer-spin-button,
+  .amount-input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  .amount-input[type=number] { -moz-appearance: textfield; }
+
+  /* 金额步进器 */
+  .amount-stepper {
+    display: flex; flex-direction: column;
+    position: absolute; right: 6px; top: 50%;
+    transform: translateY(-50%);
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid rgba(212,175,55,0.12);
+    background: rgba(18,18,18,0.8);
+  }
+  .amount-stepper button {
+    width: 24px; height: 18px;
+    border: none; outline: none;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    user-select: none;
+    -webkit-user-select: none;
+    background: transparent;
+  }
+  .amount-stepper button:hover {
+    background: rgba(212,175,55,0.15);
+  }
+  .amount-stepper button:active {
+    background: rgba(212,175,55,0.25);
+  }
+  .amount-stepper .step-up {
+    border-bottom: 1px solid rgba(212,175,55,0.08);
+  }
+  .amount-stepper svg {
+    width: 10px; height: 10px;
+    stroke: #d4af37;
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ===== 自定义商品类型下拉框 ===== */
+  .category-select-wrap {
+    margin-top: 16px;
+    position: relative;
+    z-index: 10;
+  }
+  .category-select-label {
+    font-size: 12px;
+    color: rgba(212,175,55,0.45);
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  .cd-selected {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(212,175,55,0.2);
+    border-radius: 12px;
+    padding: 13px 16px;
+    font-size: 14px;
+    color: #e8d9a0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.3s;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .cd-selected:active,
+  .cd-selected.open {
+    border-color: #d4af37;
+    box-shadow: 0 0 0 2px rgba(212,175,55,0.12);
+    background-color: rgba(255,255,255,0.07);
+  }
+  .cd-selected.open {
+    border-radius: 12px 12px 0 0;
+    border-bottom-color: transparent;
+  }
+  .cd-arrow {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    margin-left: 8px;
+    transition: transform 0.25s;
+  }
+  .cd-arrow path { fill: #d4af37; }
+  .cd-selected.open .cd-arrow {
+    transform: rotate(180deg);
+  }
+
+  /* 下拉选项列表 —— JS 动态定位到按钮正下方，只显示3行 */
+  .cd-options {
+    position: fixed;
+    background: #1a1a1a;
+    border: 1px solid #d4af37;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    max-height: 156px;
+    overflow-y: auto;
+    z-index: 60;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6), 0 0 12px rgba(212,175,55,0.1);
+    animation: dropdownIn 0.2s ease;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cd-options.show {
+    display: block;
+  }
+  @keyframes dropdownIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 滚动条样式 */
+  .cd-options::-webkit-scrollbar {
+    width: 5px;
+  }
+  .cd-options::-webkit-scrollbar-track {
+    background: rgba(255,255,255,0.03);
+    border-radius: 0 0 12px 0;
+  }
+  .cd-options::-webkit-scrollbar-thumb {
+    background: rgba(212,175,55,0.35);
+    border-radius: 3px;
+  }
+  .cd-options::-webkit-scrollbar-thumb:hover {
+    background: rgba(212,175,55,0.55);
+  }
+
+  .cd-option {
+    padding: 14px 16px;
+    font-size: 15px;
+    color: #ccc;
+    cursor: pointer;
+    transition: all 0.15s;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    line-height: 1.5;
+  }
+  .cd-option:last-child {
+    border-bottom: none;
+  }
+  .cd-option:active,
+  .cd-option:hover {
+    background: rgba(212,175,55,0.12);
+    color: #d4af37;
+  }
+  .cd-option.selected {
+    background: rgba(212,175,55,0.15);
+    color: #d4af37;
+    font-weight: 600;
+  }
+
+  /* 下拉遮罩（全屏，点击关闭） */
+  .cd-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0,0,0,0.35);
+    display: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cd-overlay.show {
+    display: block;
+  }
+
+  /* ===== 支付按钮 ===== */
+  .pay-section {
+    padding: 16px 24px 28px;
+  }
+  .pay-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #d4af37 0%, #b8860b 50%, #d4af37 100%);
+    background-size: 200% 100%;
+    color: #0a0a0a;
+    border: none;
+    border-radius: 14px;
+    padding: 17px;
+    font-size: 17px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.4s ease;
+    font-family: inherit;
+    letter-spacing: 2px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(212,175,55,0.25);
+  }
+  .pay-btn::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%; width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s;
+  }
+  .pay-btn:hover {
+    background-position: 100% 0;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(212,175,55,0.35);
+  }
+  .pay-btn:hover::after { left: 100%; }
+  .pay-btn:active { transform: translateY(0); }
+  .pay-btn:disabled {
+    opacity: 0.5; cursor: not-allowed;
+    transform: none !important; box-shadow: none !important;
+  }
+  .pay-btn:disabled::after { display: none; }
+
+  .pay-hint {
+    text-align:center;font-size:11px;color:rgba(212,175,55,0.35);margin-top:12px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ===== 二维码区域 ===== */
+  .qr-section {
+    padding: 12px 24px 20px;
+    text-align: center;
+    display: none;
+  }
+  .qr-section.show { display: block; animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  .qr-title {
+    font-size: 17px; font-weight: 700;
+    background: linear-gradient(135deg, #f0d77a, #d4af37);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 2px;
+    letter-spacing: 1px;
+  }
+  .qr-subtitle {
+    font-size: 12px; color: rgba(212,175,55,0.45);
+    margin-bottom: 16px;
+  }
+  .qr-box {
+    background: rgba(255,255,255,0.97);
+    border: 2px solid rgba(212,175,55,0.3);
+    border-radius: 20px;
+    padding: 16px;
+    display: inline-block;
+    margin-bottom: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 20px rgba(212,175,55,0.08);
+    position: relative;
+  }
+  .qr-img {
+    display: block;
+    width: 210px; height: 210px;
+    border-radius: 10px;
+  }
+  .qr-amount {
+    font-size: 28px; font-weight: 800;
+    background: linear-gradient(135deg, #f0d77a, #d4af37);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 8px 0 2px;
+  }
+  .qr-subject {
+    font-size: 13px; color: rgba(212,175,55,0.6);
+    margin-bottom: 10px;
+  }
+  .qr-tip {
+    font-size: 13px;
+    color: rgba(212,175,55,0.6);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 8px 16px;
+    border-radius: 10px;
+    background: rgba(212,175,55,0.06);
+    max-width: 260px;
+    margin: 0 auto 10px;
+  }
+  .qr-tip .dot {
+    width: 8px; height: 8px;
+    background: #d4af37;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+    box-shadow: 0 0 8px rgba(212,175,55,0.5);
+  }
+  @keyframes pulse {
+    0%, 100% { opacity:1; transform: scale(1); }
+    50%       { opacity:0.4; transform: scale(0.8); }
+  }
+  .qr-tip.paid {
+    color: #52c41a;
+    background: rgba(82,196,26,0.08);
+    border: 1px solid rgba(82,196,26,0.15);
+  }
+  .qr-tip.paid .dot {
+    background: #52c41a;
+    animation: none;
+    box-shadow: 0 0 8px rgba(82,196,26,0.4);
+  }
+
+  .download-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(212,175,55,0.1);
+    border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-size: 13px; font-weight: 600;
+    color: #d4af37;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-family: inherit;
+    margin-right: 8px;
+  }
+  .download-btn:hover {
+    background: rgba(212,175,55,0.18);
+    border-color: rgba(212,175,55,0.4);
+    transform: translateY(-1px);
+  }
+  .download-btn svg {
+    width: 16px; height: 16px; flex-shrink: 0;
+  }
+
+  .cancel-btn {
+    display: inline-flex; align-items: center;
+    background: transparent; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-size: 13px; color: rgba(255,255,255,0.4);
+    cursor: pointer;
+    transition: all 0.3s;
+    font-family: inherit;
+  }
+  .cancel-btn:hover {
+    border-color: rgba(255,255,255,0.25); color: rgba(255,255,255,0.65);
+  }
+
+  .btn-group {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; margin-top: 4px;
+  }
+
+  /* ===== 成功动画 ===== */
+  .success-section {
+    padding: 44px 24px;
+    text-align: center;
+    display: none;
+  }
+  .success-section.show { display: block; animation: successIn 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+  @keyframes successIn {
+    from { opacity:0; transform: scale(0.9); }
+    to   { opacity:1; transform: scale(1); }
+  }
+  .success-icon {
+    width: 84px; height: 84px;
+    background: linear-gradient(135deg, #d4af37, #b8860b);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 22px;
+    animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 8px 32px rgba(212,175,55,0.3), 0 0 20px rgba(212,175,55,0.1);
+  }
+  .success-icon svg {
+    width: 42px; height: 42px;
+  }
+  @keyframes popIn {
+    0%   { transform: scale(0); opacity:0; }
+    60%  { transform: scale(1.2); }
+    100% { transform: scale(1); opacity:1; }
+  }
+  .success-title {
+    font-size: 22px; font-weight: 800;
+    background: linear-gradient(135deg, #f0d77a, #d4af37);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 10px;
+    letter-spacing: 2px;
+  }
+  .success-amount {
+    font-size: 38px; font-weight: 800;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .success-trade-no {
+    font-size: 12px; color: rgba(212,175,55,0.4);
+    margin-bottom: 24px;
+    word-break: break-all;
+    line-height: 1.5;
+  }
+  .success-payer {
+    font-size: 13px; color: rgba(212,175,55,0.5);
+    margin-bottom: 28px;
+  }
+  .new-pay-btn {
+    background: linear-gradient(135deg, #d4af37 0%, #b8860b 50%, #d4af37 100%);
+    background-size: 200% 100%;
+    color: #0a0a0a; border: none;
+    border-radius: 14px;
+    padding: 15px 44px;
+    font-size: 15px; font-weight: 800;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 2px;
+    box-shadow: 0 8px 32px rgba(212,175,55,0.25);
+    transition: all 0.3s;
+  }
+  .new-pay-btn:hover {
+    background-position: 100% 0;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(212,175,55,0.35);
+  }
+
+  /* ===== 测试模式提示 ===== */
+  .test-mode-bar {
+    display: none;
+    background: linear-gradient(90deg, rgba(250,173,20,0.12), rgba(250,173,20,0.05));
+    border: 1px solid rgba(250,173,20,0.25);
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin: 0 24px 0;
+    font-size: 12px;
+    color: #faad14;
+    text-align: center;
+    line-height: 1.5;
+  }
+  .test-mode-bar.show { display: block; }
+
+  /* ===== 支付宝接口错误弹窗 ===== */
+  .alipay-error-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+  }
+  .alipay-error-overlay.show { display: flex; }
+  .alipay-error-card {
+    background: linear-gradient(145deg, #1a1a2e, #16213e);
+    border: 1px solid rgba(255,77,79,0.3);
+    border-radius: 16px;
+    padding: 24px 20px;
+    max-width: 380px; width: 90%;
+    color: #e0e0e0;
+    text-align: center;
+  }
+  .alipay-error-icon {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: rgba(255,77,79,0.15);
+    color: #ff4d4f;
+    font-size: 24px; font-weight: bold;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px;
+  }
+  .alipay-error-card h3 {
+    color: #ff4d4f;
+    font-size: 16px;
+    margin: 0 0 16px;
+  }
+  .alipay-error-table {
+    text-align: left;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+  }
+  .ae-row {
+    display: flex; justify-content: space-between;
+    padding: 5px 0;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .ae-row:last-child { border-bottom: none; }
+  .ae-row span:first-child {
+    color: #888;
+    font-family: monospace;
+    font-size: 12px;
+  }
+  .ae-row span:last-child {
+    color: #ff4d4f;
+    word-break: break-all;
+    text-align: right;
+    max-width: 220px;
+  }
+  .alipay-error-close {
+    background: rgba(255,77,79,0.15);
+    border: 1px solid rgba(255,77,79,0.3);
+    color: #ff4d4f;
+    padding: 8px 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  /* ===== 错误提示 ===== */
+  .error-toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: linear-gradient(135deg, #ff4d4f, #cf1322);
+    color: #fff;
+    padding: 14px 28px;
+    border-radius: 14px;
+    font-size: 14px; font-weight: 600;
+    box-shadow: 0 8px 32px rgba(255,77,79,0.35);
+    z-index: 999;
+    animation: toastSlide 0.35s ease;
+    display: none;
+    letter-spacing: 0.5px;
+  }
+  .error-toast.show { display: block; }
+  @keyframes toastSlide {
+    from { opacity:0; transform: translateX(-50%) translateY(-20px); }
+    to   { opacity:1; transform: translateX(-50%) translateY(0); }
+  }
+
+  /* ===== localhost 提示条 ===== */
+  .localhost-tip {
+    position: fixed; top: 0; left: 0; right: 0;
+    background: linear-gradient(135deg, rgba(250,173,20,0.95), rgba(255,140,0,0.95));
+    color: #1a1a1a;
+    padding: 12px 16px;
+    font-size: 13px; font-weight: 700;
+    text-align: center;
+    z-index: 1000;
+    box-shadow: 0 2px 12px rgba(250,173,20,0.3);
+    display: none;
+  }
+  .localhost-tip.show { display: block; }
+  .localhost-tip .ip-list {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+    margin-top: 8px;
+  }
+  .localhost-tip .ip-link {
+    display: inline-block;
+    background: rgba(0,0,0,0.85);
+    color: #ffd700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    border: 1px solid rgba(0,0,0,0.3);
+  }
+  .localhost-tip .ip-link:hover {
+    background: #000;
+    color: #fff;
+  }
+
+  /* ===== 加载动画 ===== */
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(212,175,55,0.15);
+    border-top-color: #d4af37;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== 响应式 ===== */
+  @media (max-width: 480px) {
+    body { padding: 8px; }
+    .cashier-card {
+      border-radius: 18px;
+      max-width: 100%;
+    }
+    .amount-input { font-size: 36px; width: 170px; }
+    .amount-yen { font-size: 28px; }
+    .merchant-header { padding: 22px 20px 16px; }
+    .merchant-header.compact { padding: 10px 16px 8px; }
+    .merchant-header.compact .logo-wrap { width: 44px; height: 44px; margin-bottom: 6px; }
+    .merchant-header.compact .brand-name { font-size: 15px; letter-spacing: 2px; }
+    .merchant-header.compact .alipay-badge { margin-top: 5px; padding: 2px 8px; font-size: 9px; }
+    .logo-wrap { width: 62px; height: 62px; border-radius: 16px; }
+    .brand-name { font-size: 19px; letter-spacing: 3px; }
+    .qr-section { padding: 8px 16px 16px; }
+    .qr-title { font-size: 15px; }
+    .qr-subtitle { font-size: 11px; margin-bottom: 12px; }
+    .qr-box { padding: 12px; border-radius: 16px; margin-bottom: 8px; }
+    .qr-img { width: 160px; height: 160px; }
+    .qr-amount { font-size: 24px; margin: 6px 0 2px; }
+    .qr-subject { font-size: 11px; margin-bottom: 8px; }
+    .qr-tip { font-size: 11px; padding: 6px 14px; margin-bottom: 8px; }
+    .success-amount { font-size: 32px; }
+    .btn-group { gap: 8px; }
+    .download-btn, .cancel-btn { padding: 9px 16px; font-size: 12px; }
+    .cd-options { max-height: 140px; }
+  }
+
+  @media (max-width: 360px) {
+    .amount-input { font-size: 30px; width: 140px; }
+    .amount-yen { font-size: 24px; }
+    .brand-name { font-size: 17px; }
+    .pay-btn { padding: 14px; font-size: 15px; }
+    .cd-options { max-height: 128px; }
+    .qr-img { width: 140px; height: 140px; }
+    .qr-title { font-size: 14px; }
+    .qr-amount { font-size: 22px; }
+    .qr-section { padding: 6px 14px 14px; }
+    .download-btn, .cancel-btn { padding: 8px 14px; font-size: 11px; }
+  }
+
+  /* ===== 平板端 481-767px ===== */
+  @media (min-width: 481px) and (max-width: 767px) {
+    body { padding: 24px; align-items: flex-start; }
+    .cashier-card { max-width: 480px; margin-top: 0; }
+    .merchant-header { padding: 26px 24px 20px; }
+    .merchant-header.compact { padding: 14px 20px 10px; }
+    .merchant-header.compact .logo-wrap { width: 50px; height: 50px; margin-bottom: 7px; }
+    .merchant-header.compact .brand-name { font-size: 16px; }
+    .logo-wrap { width: 68px; height: 68px; border-radius: 18px; margin-bottom: 12px; }
+    .brand-name { font-size: 21px; letter-spacing: 4px; }
+    .merchant-desc { font-size: 12px; }
+    .amount-section { padding: 26px 24px 18px; }
+    .amount-label { font-size: 13px; margin-bottom: 14px; }
+    .amount-input { font-size: 44px; width: 200px; }
+    .amount-yen { font-size: 34px; }
+    .pay-section { padding: 18px 24px 30px; }
+    .pay-btn { padding: 18px; font-size: 17px; }
+    .qr-section { padding: 14px 24px 22px; }
+    .qr-title { font-size: 18px; }
+    .qr-subtitle { font-size: 12px; margin-bottom: 14px; }
+    .qr-box { padding: 14px; border-radius: 18px; margin-bottom: 10px; }
+    .qr-img { width: 200px; height: 200px; }
+    .qr-amount { font-size: 28px; margin: 8px 0 2px; }
+    .qr-subject { font-size: 12px; margin-bottom: 10px; }
+    .qr-tip { font-size: 12px; padding: 8px 18px; margin-bottom: 10px; }
+    .cd-options { max-height: 148px; }
+    .success-title { font-size: 24px; }
+    .success-amount { font-size: 36px; }
+    .download-btn, .cancel-btn { padding: 10px 20px; font-size: 13px; }
+  }
+
+  /* ===== 桌面端 768-1199px ===== */
+  @media (min-width: 768px) {
+    body {
+      padding: 16px 24px;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+    .cashier-card {
+      max-width: 520px;
+      border-radius: 24px;
+    }
+    .merchant-header { padding: 24px 28px 18px; }
+    .merchant-header.compact { padding: 12px 20px 8px; }
+    .merchant-header.compact .logo-wrap { width: 48px; height: 48px; margin-bottom: 6px; }
+    .merchant-header.compact .brand-name { font-size: 16px; letter-spacing: 3px; }
+    .merchant-header.compact .merchant-desc { font-size: 11px; }
+    .merchant-header.compact .alipay-badge { margin-top: 6px; padding: 2px 10px; font-size: 10px; }
+    .logo-wrap { width: 72px; height: 72px; border-radius: 20px; margin-bottom: 12px; }
+    .brand-name { font-size: 24px; letter-spacing: 5px; }
+    .merchant-desc { font-size: 13px; letter-spacing: 2px; }
+    .alipay-badge { padding: 5px 14px; font-size: 11px; margin-top: 12px; }
+
+    .amount-section { padding: 20px 28px 14px; }
+    .amount-label { font-size: 13px; margin-bottom: 12px; letter-spacing: 2px; }
+    .amount-input { font-size: 48px; width: 220px; padding-bottom: 4px; }
+    .amount-yen { font-size: 38px; }
+
+    .pay-section { padding: 14px 28px 26px; }
+    .pay-btn { padding: 17px; font-size: 17px; border-radius: 14px; }
+    .pay-hint { font-size: 11px; margin-top: 12px; }
+
+    /* 桌面端 QR 展示区 */
+    .qr-section { padding: 10px 28px 16px; }
+    .qr-title { font-size: 17px; margin-bottom: 2px; }
+    .qr-subtitle { font-size: 12px; margin-bottom: 12px; }
+    .qr-box { padding: 14px; border-radius: 20px; margin-bottom: 8px; }
+    .qr-img { width: 190px; height: 190px; border-radius: 10px; }
+    .qr-amount { font-size: 28px; margin: 8px 0 2px; }
+    .qr-subject { font-size: 13px; margin-bottom: 8px; }
+    .qr-tip { font-size: 13px; padding: 8px 18px; margin-bottom: 8px; max-width: 280px; }
+    .download-btn, .cancel-btn { padding: 10px 22px; font-size: 13px; }
+    .btn-group { gap: 10px; margin-top: 4px; }
+
+    .success-section { padding: 44px 28px; }
+    .success-title { font-size: 24px; }
+    .success-amount { font-size: 40px; }
+    .success-trade-no { font-size: 12px; }
+    .success-payer { font-size: 13px; margin-bottom: 28px; }
+    .new-pay-btn { padding: 15px 48px; font-size: 15px; }
+    .success-icon { width: 84px; height: 84px; }
+    .success-icon svg { width: 42px; height: 42px; }
+
+    .error-toast { font-size: 14px; padding: 14px 28px; border-radius: 14px; }
+    .cd-options { max-height: 150px; }
+    .cd-option { padding: 14px 16px; font-size: 15px; }
+  }
+
+  /* ===== 大屏桌面 1200px+ ===== */
+  @media (min-width: 1200px) {
+    body { padding: 24px; align-items: flex-start; }
+    .cashier-card { max-width: 560px; }
+    .merchant-header { padding: 28px 32px 20px; }
+    .merchant-header.compact { padding: 14px 24px 10px; }
+    .merchant-header.compact .logo-wrap { width: 52px; height: 52px; }
+    .merchant-header.compact .brand-name { font-size: 18px; }
+    .logo-wrap { width: 78px; height: 78px; margin-bottom: 14px; }
+    .brand-name { font-size: 26px; }
+
+    .amount-section { padding: 24px 32px 16px; }
+    .amount-label { font-size: 14px; margin-bottom: 14px; }
+    .amount-input { font-size: 52px; width: 250px; }
+    .amount-yen { font-size: 42px; }
+    .cd-selected { padding: 14px 18px; font-size: 15px; }
+
+    .pay-section { padding: 16px 32px 28px; }
+    .pay-btn { padding: 18px; font-size: 18px; }
+    .qr-img { width: 220px; height: 220px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="error-toast" id="errorToast"></div>
+
+<!-- localhost 提示条：仅在 localhost 访问时显示，显示可用局域网 IP 链接，点击后切换地址 -->
+<div class="localhost-tip" id="localhostTip">
+  <div>⚠️ 当前使用 localhost 访问，生成的二维码手机无法扫描。</div>
+  <div id="localhostIpList" class="ip-list"></div>
+</div>
+
+<div class="cashier-card" id="mainCard">
+  <!-- 顶部品牌区 -->
+  <div class="merchant-header">
+    <div class="logo-wrap">
+      <img src="logo-pay.png" alt="黑金PAY Logo" draggable="false">
+    </div>
+    <div class="brand-name">黑金PAY</div>
+    <div class="merchant-desc">安全收款 · 即时到账</div>
+    <div class="alipay-badge">🔒 支付宝加密支付</div>
+  </div>
+
+  <!-- 输入区域 -->
+  <div class="amount-section" id="inputSection">
+    <div class="amount-label">收款金额</div>
+    <div class="amount-input-wrap">
+      <span class="amount-yen">¥</span>
+      <input class="amount-input" id="amountInput" type="number" step="0.01" min="0.01" max="100000" placeholder="0.00">
+      <div class="amount-stepper">
+        <button class="step-up" data-delta="0.01" title="增加">
+          <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+        <button class="step-down" data-delta="-0.01" title="减少">
+          <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 商品类型：下拉框在按钮正下方 -->
+    <div class="category-select-wrap">
+      <div class="category-select-label">商品类型</div>
+      <div class="cd-selected" id="cdSelected" onclick="toggleCategoryDropdown(event)">
+        <span id="cdSelectedText">游戏充值</span>
+        <svg class="cd-arrow" viewBox="0 0 12 12"><path d="M6 8L1 3h10z"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- 支付按钮 -->
+  <div class="pay-section" id="btnSection">
+    <button class="pay-btn" id="payBtn" onclick="createQRCode()">
+      生成收款码
+    </button>
+    <p class="pay-hint">点击生成支付宝收款二维码，用户扫码支付</p>
+  </div>
+
+  <!-- 支付等待/处理区域 -->
+  <div class="qr-section" id="paySection">
+    <div class="qr-title" id="payTitle">处理中...</div>
+    <div class="qr-subtitle" id="paySubtitle"></div>
+    <div class="qr-box" style="background:rgba(18,18,18,0.6);border-color:rgba(212,175,55,0.2);">
+      <div style="padding:40px 20px;text-align:center;">
+        <div class="spinner" style="margin-bottom:20px;"></div>
+        <div style="font-size:14px;color:rgba(212,175,55,0.7);" id="payStatusMsg">正在处理支付...</div>
+      </div>
+    </div>
+    <div class="qr-amount" id="payAmount">¥0.00</div>
+    <div class="qr-subject" id="paySubject"></div>
+    <div class="qr-tip" id="payTip">
+      <span class="dot"></span>
+      请等待支付结果...
+    </div>
+    <div class="btn-group">
+      <button class="cancel-btn" onclick="resetToInput()">返回</button>
+    </div>
+  </div>
+
+  <!-- 测试模式提示条 -->
+  <div class="test-mode-bar" id="testModeBar" style="display:none">
+  </div>
+
+  <!-- 支付宝接口错误弹窗 -->
+  <div class="alipay-error-overlay" id="alipayErrorOverlay">
+    <div class="alipay-error-card">
+      <div class="alipay-error-icon">✕</div>
+      <h3>支付宝接口报错</h3>
+      <div class="alipay-error-table">
+        <div class="ae-row"><span>code</span><span id="aeCode">—</span></div>
+        <div class="ae-row"><span>sub_code</span><span id="aeSubCode">—</span></div>
+        <div class="ae-row"><span>sub_msg</span><span id="aeSubMsg">—</span></div>
+        <div class="ae-row"><span>msg</span><span id="aeMsg">—</span></div>
+      </div>
+      <button class="alipay-error-close" onclick="closeAlipayError()">关闭</button>
+    </div>
+  </div>
+
+  <!-- 支付成功 -->
+  <div class="success-section" id="successSection">
+    <div class="success-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </div>
+    <div class="success-title">支付成功！</div>
+    <div class="success-amount" id="successAmount">¥0.00</div>
+    <div class="success-payer" id="successPayer"></div>
+    <div class="success-trade-no" id="successTradeNo"></div>
+    <button class="new-pay-btn" onclick="resetToInput()">继续支付</button>
+  </div>
+</div>
+
+<!-- 下拉遮罩（全屏点击关闭） -->
+<div class="cd-overlay" id="cdOverlay" onclick="closeCategoryDropdown()"></div>
+
+<!-- 下拉选项（position:fixed + JS 动态定位，在卡片外避免 backdrop-filter stacking 问题） -->
+<div class="cd-options" id="cdOptions">
+  <div class="cd-option selected" onclick="selectCategory('游戏充值')">游戏充值</div>
+  <div class="cd-option" onclick="selectCategory('百货家居')">百货家居</div>
+  <div class="cd-option" onclick="selectCategory('服装批发')">服装批发</div>
+  <div class="cd-option" onclick="selectCategory('五金器械')">五金器械</div>
+  <div class="cd-option" onclick="selectCategory('软件定制服务')">软件定制服务</div>
+</div>
+
+<script>
+// ==================== 配置 ====================
+const API_BASE = '';
+
+// ==================== 状态 ====================
+let currentOutTradeNo = '';
+let pollingTimer = null;
+let lastAmount = '';
+let lastSubject = '';
+let lastQrImage = '';
+let currentCategory = '游戏充值';
+let cdOpen = false;
+let limitConfig = {};  // 从 /api/limits 拉取的限额配置
+
+// ==================== 自定义下拉框 ====================
+function toggleCategoryDropdown(e) {
+  e.stopPropagation();
+  const btn = document.getElementById('cdSelected');
+  const list = document.getElementById('cdOptions');
+  const overlay = document.getElementById('cdOverlay');
+  cdOpen = !cdOpen;
+  if (cdOpen) {
+    // 动态定位：下拉框紧贴按钮下方，与按钮等宽
+    const rect = btn.getBoundingClientRect();
+    const gap = 0; // 按钮 open 时 border-bottom 已透明，无缝衔接
+    list.style.top = (rect.bottom + gap) + 'px';
+    list.style.left = rect.left + 'px';
+    list.style.width = rect.width + 'px';
+    btn.classList.add('open');
+    list.classList.add('show');
+    overlay.classList.add('show');
+  } else {
+    btn.classList.remove('open');
+    list.classList.remove('show');
+    overlay.classList.remove('show');
+  }
+}
+
+function selectCategory(val) {
+  currentCategory = val;
+  document.getElementById('cdSelectedText').textContent = val;
+  document.querySelectorAll('.cd-option').forEach(el => {
+    el.classList.toggle('selected', el.textContent === val);
+  });
+  closeCategoryDropdown();
+}
+
+function closeCategoryDropdown() {
+  cdOpen = false;
+  document.getElementById('cdSelected').classList.remove('open');
+  document.getElementById('cdOptions').classList.remove('show');
+  document.getElementById('cdOverlay').classList.remove('show');
+}
+
+// ==================== 生成收款码 ====================
+async function createQRCode() {
+  // 每次生成前先拉取最新限额配置，确保后台修改能实时同步到收银台
+  await fetchLimitConfig();
+
+  const amount = document.getElementById('amountInput').value.trim();
+  const subject = currentCategory || '游戏充值';
+
+  if (!amount || parseFloat(amount) <= 0) {
+    showError('请输入有效金额');
+    return;
+  }
+  if (parseFloat(amount) > 100000) {
+    showError('单次收款金额不能超过 ¥100,000');
+    return;
+  }
+
+  // localhost 提示：如果用 localhost 访问，手机扫码无法跳转，仅提示不阻止，并显示可用 IP 链接
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    showLocalhostIps();
+  }
+
+  // 限额校验（来自后台设置）
+  const _amt = parseFloat(amount);
+  const _min = limitConfig.minAmount !== '' && limitConfig.minAmount !== null && limitConfig.minAmount !== undefined ? parseFloat(limitConfig.minAmount) : null;
+  const _max = limitConfig.maxAmount !== '' && limitConfig.maxAmount !== null && limitConfig.maxAmount !== undefined ? parseFloat(limitConfig.maxAmount) : null;
+  if (_min !== null && !isNaN(_min) && _amt < _min) {
+    showError(`最低支付金额为 ¥${_min.toFixed(2)}，请重新输入`);
+    return;
+  }
+  if (_max !== null && !isNaN(_max) && _amt > _max) {
+    showError(`最高支付金额为 ¥${_max.toFixed(2)}，请重新输入`);
+    return;
+  }
+
+  const payBtn = document.getElementById('payBtn');
+  payBtn.disabled = true;
+  payBtn.textContent = '生成中...';
+
+  lastAmount = amount;
+  lastSubject = subject;
+
+  try {
+    const res = await fetch(`${API_BASE}/cashier/qrcode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount,
+        subject,
+        base_url: window.location.origin   // 自动传递当前浏览器地址，用于生成跳转链接
+      })
+    });
+    const data = await res.json();
+
+    if (data.code === 'OK') {
+      currentOutTradeNo = data.out_trade_no;
+      lastQrImage = data.qr_image || '';
+      showQRCode(data);
+      startPolling();
+    } else if (data.code === 'ALIPAY_ERROR') {
+      showAlipayError(data.alipay_code, data.alipay_sub_code, data.alipay_sub_msg, data.alipay_msg);
+      payBtn.disabled = false;
+      payBtn.textContent = '生成收款码';
+    } else {
+      showError(data.message || '生成收款码失败');
+      payBtn.disabled = false;
+      payBtn.textContent = '生成收款码';
+    }
+  } catch (err) {
+    showError('网络错误：' + err.message);
+    payBtn.disabled = false;
+    payBtn.textContent = '生成收款码';
+  }
+}
+
+// ==================== 显示二维码 ====================
+function showQRCode(data) {
+  document.getElementById('inputSection').style.display = 'none';
+  document.getElementById('btnSection').style.display = 'none';
+  document.getElementById('paySection').classList.add('show');
+
+  // 紧凑头部
+  document.querySelector('.merchant-header').classList.add('compact');
+
+  document.getElementById('payTitle').textContent = '请扫码支付';
+  document.getElementById('paySubtitle').textContent = '打开支付宝扫一扫完成支付';
+  document.getElementById('payAmount').textContent = `¥${parseFloat(data.amount).toFixed(2)}`;
+  document.getElementById('paySubject').textContent = data.subject;
+
+  const qrBox = document.querySelector('#paySection .qr-box');
+  if (lastQrImage) {
+    qrBox.innerHTML = `<img src="${lastQrImage}" alt="收款码" class="qr-img">`;
+    qrBox.style.background = '#fff';
+    qrBox.style.borderColor = 'rgba(212,175,55,0.3)';
+  }
+
+  if (data.use_api) {
+    document.getElementById('payTip').innerHTML = '<span class="dot"></span> 等待扫码支付...';
+    document.getElementById('payTip').className = 'qr-tip';
+  } else if (data.use_redirect) {
+    document.getElementById('payTip').innerHTML = '<span class="dot"></span> 扫码后在页面中点击按钮，即可跳转支付宝支付';
+    document.getElementById('payTip').className = 'qr-tip';
+  } else {
+    document.getElementById('payTip').innerHTML = '<span class="dot"></span> 扫码后打开支付宝，确认支付即可（金额已锁定）';
+    document.getElementById('payTip').className = 'qr-tip';
+  }
+
+  document.querySelector('#paySection .btn-group').innerHTML = `
+    <button class="download-btn" onclick="downloadQR()" title="下载收款码">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      下载收款码
+    </button>
+    <button class="cancel-btn" onclick="resetToInput()">取消</button>
+  `;
+}
+
+// ==================== 下载收款码 ====================
+function downloadQR() {
+  if (!lastQrImage) return;
+  const a = document.createElement('a');
+  a.href = lastQrImage;
+  a.download = `收款码_¥${parseFloat(lastAmount).toFixed(2)}_${lastSubject}.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// ==================== 轮询支付状态 ====================
+function startPolling() {
+  if (pollingTimer) clearInterval(pollingTimer);
+  let pollCount = 0;
+  const maxPolls = 900;
+
+  pollingTimer = setInterval(async () => {
+    pollCount++;
+    if (pollCount > maxPolls) {
+      clearInterval(pollingTimer);
+      showError('支付超时，请重新发起');
+      setTimeout(resetToInput, 2000);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/cashier/check?out_trade_no=${currentOutTradeNo}`);
+      const data = await res.json();
+      if (data.status === 'paid') {
+        clearInterval(pollingTimer);
+        showSuccess(data);
+      }
+    } catch (e) {}
+  }, 2000);
+}
+
+// ==================== 支付成功 ====================
+function showSuccess(data) {
+  document.getElementById('paySection').classList.remove('show');
+  document.getElementById('successSection').classList.add('show');
+  document.querySelector('.merchant-header').classList.remove('compact');
+
+  document.getElementById('successAmount').textContent = `¥${parseFloat(lastAmount).toFixed(2)}`;
+  document.getElementById('successTradeNo').textContent = `交易号: ${data.trade_no}`;
+  if (data.payer) {
+    document.getElementById('successPayer').textContent = `付款方: ${data.payer}`;
+  }
+}
+
+// ==================== 重置到输入状态 ====================
+function resetToInput() {
+  if (pollingTimer) clearInterval(pollingTimer);
+  currentOutTradeNo = '';
+  lastQrImage = '';
+
+  document.getElementById('paySection').classList.remove('show');
+  document.getElementById('successSection').classList.remove('show');
+  document.getElementById('inputSection').style.display = '';
+  document.getElementById('btnSection').style.display = '';
+
+  // 恢复头部
+  document.querySelector('.merchant-header').classList.remove('compact');
+
+  document.getElementById('payBtn').disabled = false;
+  document.getElementById('payBtn').textContent = '生成收款码';
+
+  document.getElementById('amountInput').value = '';
+  document.getElementById('amountInput').focus();
+}
+
+// ==================== 错误提示 ====================
+function showError(msg) {
+  const toast = document.getElementById('errorToast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3500);
+}
+
+// ==================== 显示支付宝 API 真实错误 ====================
+function showAlipayError(code, subCode, subMsg, msg) {
+  document.getElementById('aeCode').textContent = code || '—';
+  document.getElementById('aeSubCode').textContent = subCode || '—';
+  document.getElementById('aeSubMsg').textContent = subMsg || '—';
+  document.getElementById('aeMsg').textContent = msg || '—';
+  document.getElementById('alipayErrorOverlay').classList.add('show');
+}
+function closeAlipayError() {
+  document.getElementById('alipayErrorOverlay').classList.remove('show');
+}
+
+// ==================== 金额步进 ====================
+function stepAmount(delta) {
+  const input = document.getElementById('amountInput');
+  let val = parseFloat(input.value) || 0;
+  val = Math.round((val + delta) * 100) / 100;
+  if (val < 0.01) val = 0.01;
+  if (val > 100000) val = 100000;
+  input.value = val.toFixed(2);
+  input.focus();
+}
+
+
+/* 金额步进按钮长按连续调整 */
+(function() {
+  var activeTimer = null;
+  var activeInterval = null;
+  var lastDelta = 0;
+
+  function doStep(delta) {
+    var input = document.getElementById('amountInput');
+    if (!input) return;
+    var val = parseFloat(input.value) || 0;
+    val = Math.round((val + delta) * 100) / 100;
+    if (val < 0.01) val = 0.01;
+    if (val > 100000) val = 100000;
+    input.value = val.toFixed(2);
+  }
+
+  function startPress(delta) {
+    doStep(delta);
+  }
+
+  function stopPress() {
+    clearTimeout(activeTimer);
+    clearInterval(activeInterval);
+    activeTimer = null;
+    activeInterval = null;
+  }
+
+  // 事件委托
+  document.addEventListener('mousedown', function(e) {
+    var btn = e.target.closest('.step-up, .step-down');
+    if (!btn) return;
+    e.preventDefault();
+    startPress(parseFloat(btn.getAttribute('data-delta')));
+  }, true);
+
+  document.addEventListener('touchstart', function(e) {
+    var btn = e.target.closest('.step-up, .step-down');
+    if (!btn) return;
+    startPress(parseFloat(btn.getAttribute('data-delta')));
+  }, { passive: false, capture: true });
+
+  function stopHandler() { stopPress(); }
+  document.addEventListener('mouseup', stopHandler, true);
+  document.addEventListener('touchend', stopHandler, true);
+  document.addEventListener('touchcancel', stopHandler, true);
+})();
+
+// ==================== 快捷键 ====================
+document.getElementById('amountInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    createQRCode();
+  }
+});
+
+// ==================== 窗口变化时重新定位下拉框 ====================
+window.addEventListener('resize', () => {
+  if (cdOpen) {
+    const btn = document.getElementById('cdSelected');
+    const list = document.getElementById('cdOptions');
+    const rect = btn.getBoundingClientRect();
+    list.style.top = rect.bottom + 'px';
+    list.style.left = rect.left + 'px';
+    list.style.width = rect.width + 'px';
+  }
+});
+
+// 页面滚动时关闭下拉框（但不影响下拉框内部的滚动）
+window.addEventListener('scroll', (e) => {
+  if (cdOpen) closeCategoryDropdown();
+}, { passive: true });
+
+// ==================== 拉取限额配置 ====================
+async function fetchLimitConfig() {
+  try {
+    const res = await fetch('/api/limits');
+    const data = await res.json();
+    if (data.success) {
+      limitConfig = data.data || data.config || {};
+    }
+  } catch (e) {}
+}
+
+// 页面加载时拉取一次限额配置
+fetchLimitConfig();
+
+// 页面加载时检测 localhost，自动获取并显示可用局域网 IP 链接
+async function showLocalhostIps() {
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return;
+  }
+  const tip = document.getElementById('localhostTip');
+  const list = document.getElementById('localhostIpList');
+  tip.classList.add('show');
+  try {
+    const res = await fetch('/api/network-info');
+    const json = await res.json();
+    const ips = (json.data && json.data.ips) || [];
+    const port = (json.data && json.data.port) || window.location.port || 3002;
+    if (ips.length === 0) {
+      list.innerHTML = '<span>未检测到局域网 IP，请手动运行 ipconfig 查看</span>';
+      return;
+    }
+    list.innerHTML = ips.map(ip => {
+      const url = `${window.location.protocol}//${ip}:${port}${window.location.pathname}${window.location.search}`;
+      return `<a class="ip-link" href="${url}" target="_blank">${url}</a>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = '<span>获取局域网 IP 失败，请手动运行 ipconfig 查看</span>';
+  }
+}
+showLocalhostIps();
+
+</script>
+</body>
+</html>

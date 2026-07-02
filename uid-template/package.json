@@ -1,0 +1,14 @@
+{
+  "name": "heijin-pay-uid-cashier",
+  "version": "1.0.0",
+  "description": "黑金PAY 收银台 · UID 版（支付宝个人收款，无需开放平台应用）",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.13.0",
+    "qrcode": "^1.5.4"
+  }
+}

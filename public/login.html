@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>黑金PAY · 商户管理系统登录</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --gold: #d4af37;
+    --gold-light: #f0d77a;
+    --gold-dim: rgba(212,175,55,0.3);
+    --bg: #070707;
+    --bg-card: #0f0f0f;
+    --text: #e8e8e8;
+    --text-dim: rgba(232,232,232,0.5);
+    --border: rgba(212,175,55,0.15);
+  }
+  /* ===== 黑金流光全局滚动条 ===== */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-card); }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--gold-light), var(--gold));
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #fff5cc, var(--gold-light)); }
+  * { scrollbar-width: thin; scrollbar-color: var(--gold) var(--bg-card); }
+  body {
+    font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background:
+      radial-gradient(ellipse at 15% 10%, rgba(212,175,55,0.08) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 90%, rgba(180,140,30,0.05) 0%, transparent 45%);
+    animation: bgFlow 18s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+  @keyframes bgFlow {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    33% { transform: translate(-2%, 2%) rotate(1deg); }
+    66% { transform: translate(2%, -1%) rotate(-1deg); }
+  }
+  .login-card {
+    position: relative;
+    z-index: 1;
+    width: 420px;
+    max-width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 42px 36px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 40px rgba(212,175,55,0.06);
+    text-align: center;
+  }
+  .login-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 10%; right: 10%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+  }
+  .brand-logo {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold), rgba(212,175,55,0.5));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 900; color: #000;
+    margin: 0 auto 20px;
+    box-shadow: 0 0 30px rgba(212,175,55,0.3);
+  }
+  .brand-title {
+    font-size: 24px; font-weight: 800;
+    background: linear-gradient(90deg, var(--gold-light), var(--gold));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+  }
+  .brand-sub {
+    font-size: 12px; color: var(--text-dim); margin-bottom: 32px;
+  }
+  .form-group {
+    text-align: left; margin-bottom: 18px;
+  }
+  .form-label {
+    display: block; font-size: 13px; font-weight: 600;
+    color: var(--gold); margin-bottom: 8px; letter-spacing: 0.5px;
+  }
+  .form-input {
+    width: 100%;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 16px;
+    color: var(--text); font-size: 15px;
+    font-family: inherit;
+    transition: all 0.25s;
+    outline: none;
+  }
+  .form-input:focus {
+    border-color: var(--gold);
+    background: rgba(212,175,55,0.05);
+    box-shadow: 0 0 0 3px rgba(212,175,55,0.1);
+  }
+  .btn-login {
+    width: 100%;
+    background: linear-gradient(135deg, var(--gold), rgba(212,175,55,0.7));
+    color: #000; border: none;
+    padding: 14px; border-radius: 10px;
+    font-size: 16px; font-weight: 700;
+    cursor: pointer; transition: all 0.3s;
+    margin-top: 10px;
+    box-shadow: 0 4px 15px rgba(212,175,55,0.2);
+    letter-spacing: 2px;
+  }
+  .btn-login:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 25px rgba(212,175,55,0.4);
+  }
+  .btn-login:disabled {
+    opacity: 0.5; cursor: not-allowed; transform: none;
+  }
+  .error-msg {
+    color: #e74c3c; font-size: 13px; margin-top: 14px;
+    min-height: 20px;
+  }
+  .default-tip {
+    margin-top: 24px; padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .default-tip span { color: var(--gold); }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="brand-logo">黑</div>
+  <div class="brand-title">黑金PAY 商户管理系统</div>
+  <div class="brand-sub">模板内嵌 · 一键生成 · 统一管理</div>
+
+  <div class="form-group">
+    <label class="form-label">管理员账号</label>
+    <input type="text" class="form-input" id="username" placeholder="请输入管理员账号" value="admin" onkeydown="if(event.key==='Enter')document.getElementById('password').focus()">
+  </div>
+  <div class="form-group">
+    <label class="form-label">登录密码</label>
+    <input type="password" class="form-input" id="password" placeholder="请输入登录密码" onkeydown="if(event.key==='Enter')doLogin()">
+  </div>
+
+  <button class="btn-login" id="btnLogin" onclick="doLogin()">登 录</button>
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="default-tip">
+    默认账号：<span>admin</span>，默认密码：<span>yy123456</span><br>
+    登录后请及时修改默认密码以确保安全
+  </div>
+</div>
+
+<script>
+const TOKEN_KEY = 'heijin_admin_token';
+
+async function doLogin() {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const btn = document.getElementById('btnLogin');
+  const err = document.getElementById('errorMsg');
+
+  if (!username) return err.textContent = '请输入账号';
+  if (!password) return err.textContent = '请输入密码';
+
+  btn.disabled = true;
+  btn.textContent = '登录中...';
+  err.textContent = '';
+
+  try {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const json = await res.json();
+    if (json.code === 'OK' && json.token) {
+      sessionStorage.setItem(TOKEN_KEY, json.token);
+      location.href = 'index.html';
+    } else {
+      err.textContent = json.message || '登录失败';
+      btn.disabled = false;
+      btn.textContent = '登 录';
+    }
+  } catch (e) {
+    err.textContent = '网络错误：' + e.message;
+    btn.disabled = false;
+    btn.textContent = '登 录';
+  }
+}
+
+// 已登录则直接跳转
+(async function() {
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  if (!token) return;
+  try {
+    const res = await fetch('/api/admin/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const json = await res.json();
+    if (json.loggedIn) location.href = 'index.html';
+  } catch (e) {}
+})();
+</script>
+
+</body>
+</html>
