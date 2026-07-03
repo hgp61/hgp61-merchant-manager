@@ -633,6 +633,33 @@ function getMerchantNameForSession(req) {
   return (entry && entry.name) || req.runtime.security.merchantName || req.merchant.merchantName || '';
 }
 
+// 支付宝浏览器检测：支付宝扫码时直接跳 alipays://，不显示中间确认页
+app.get('/m/:id/pay', (req, res, next) => {
+  handleAlipayRedirect(req, res, next);
+});
+app.get('/m/:id/pay/', (req, res, next) => {
+  handleAlipayRedirect(req, res, next);
+});
+
+function handleAlipayRedirect(req, res, next) {
+  const ua = (req.headers['user-agent'] || '').toLowerCase();
+  // 支付宝内置浏览器（AlipayClient）或支付宝相关 UA
+  if (ua.includes('alipayclient') || ua.includes('alipay')) {
+    const m = req.merchant;
+    if (m.type !== 'uid') return next();
+    const amount = parseFloat(req.query.amount) || 0;
+    const memo = req.query.memo || '';
+    const uid = req.query.uid || m.alipayUid;
+    if (amount && uid) {
+      const biz = JSON.stringify({ s: 'money', u: uid, a: amount.toFixed(2), m: memo });
+      const ebiz = encodeURIComponent(biz);
+      const alipaysUrl = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz;
+      return res.redirect(302, alipaysUrl);
+    }
+  }
+  next();
+}
+
 // 商户静态文件（根据类型选择模板目录）
 app.use('/m/:id', (req, res, next) => {
   const templateDir = req.merchant.type === 'uid' ? UID_TEMPLATE_DIR : TEMPLATE_DIR;

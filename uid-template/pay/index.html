@@ -16,7 +16,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 .hr{height:1px;background:rgba(212,175,55,0.1);margin:20px 0 24px}
 .btn{display:block;width:100%;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;border-radius:14px;padding:16px 0;font-size:18px;font-weight:800;text-decoration:none;letter-spacing:3px;cursor:pointer;margin-bottom:12px;box-shadow:0 4px 20px rgba(212,175,55,0.25);-webkit-tap-highlight-color:transparent}
 .btn:active{opacity:0.85;transform:scale(0.98)}
-.btn2{display:block;width:100%;background:transparent;color:#d4af37;border:1px solid rgba(212,175,55,0.3);border-radius:14px;padding:14px 0;font-size:15px;font-weight:600;text-decoration:none;letter-spacing:2px;cursor:pointer;margin-bottom:8px;-webkit-tap-highlight-color:transparent}
 .tip{font-size:11px;color:rgba(255,255,255,0.18);margin-top:20px;line-height:1.8;text-align:left}
 .tip li{list-style:none;padding-left:14px;position:relative}
 .tip li:before{content:"●";position:absolute;left:0;color:rgba(212,175,55,0.3);font-size:8px;top:3px}
@@ -37,7 +36,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     <div class="memo" id="memo" style="display:none"></div>
     <div class="hr"></div>
     <a class="btn" id="btn1" href="#">打开支付宝付款</a>
-    <a class="btn2" id="btn2" href="#">换方式（备用）</a>
     <ul class="tip">
       <li>点击按钮后，系统将打开支付宝付款</li>
       <li>金额已锁定，确认无误后输入密码即可</li>
@@ -75,10 +73,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   var biz = JSON.stringify({ s:'money', u:uid, a:parseFloat(amount).toFixed(2), m:memo });
   var ebiz = encodeURIComponent(biz);
   var url1 = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz;
-  var url2 = 'alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=' + ebiz;
 
   document.getElementById('btn1').href = url1;
-  document.getElementById('btn2').href = url2;
 
   // 监听从支付宝返回
   var hasHidden = false;
