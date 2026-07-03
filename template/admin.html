@@ -21,7 +21,10 @@
     overflow-x: hidden;
     min-height: 100vh;
     scrollbar-gutter: stable;
+    /* 防止未登录时页面闪烁 */
+    display: none;
   }
+  body.ready { display: flex; }
   /* ===== 黑金流光全局滚动条 ===== */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: #0f0f0f; }
@@ -2468,6 +2471,7 @@ async function checkLoginStatus() {
     });
     const json = await res.json();
     if (json.code === 'OK') {
+      document.body.classList.add('ready');
       return true;
     } else {
       sessionStorage.removeItem(TOKEN_KEY);
@@ -2479,6 +2483,7 @@ async function checkLoginStatus() {
     location.href = 'login.html';
     return false;
   }
+}
 }
 
 // 退出登录
@@ -4451,6 +4456,12 @@ document.addEventListener('DOMContentLoaded', async function() {
       history.replaceState(null, '', cleanUrl);
     }
   } catch(e) {}
+
+  // 如果本地无 token 且 URL 无 token，立即跳转，避免页面闪烁
+  if (!getToken()) {
+    location.href = 'login.html';
+    return;
+  }
 
   // 先检查登录状态
   const loggedIn = await checkLoginStatus();
