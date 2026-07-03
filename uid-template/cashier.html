@@ -1202,6 +1202,12 @@ async function createQRCode() {
     const data = await res.json();
 
     if (data.code === 'OK') {
+      // UID 简易支付: 直接跳转支付宝转账页面
+      if (data.use_direct_redirect) {
+        currentOutTradeNo = data.out_trade_no;
+        window.location.href = data.qr_code;
+        return;
+      }
       currentOutTradeNo = data.out_trade_no;
       lastQrImage = data.qr_image || '';
       showQRCode(data);

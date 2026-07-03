@@ -200,10 +200,10 @@
     color: #3498db;
     border: 1px solid rgba(52,152,219,0.3);
   }
-  .type-badge.type-face {
-    background: rgba(212,175,55,0.15);
-    color: var(--gold);
-    border: 1px solid rgba(212,175,55,0.3);
+  .type-badge.type-uid-simple {
+    background: rgba(46,204,113,0.15);
+    color: #2ecc71;
+    border: 1px solid rgba(46,204,113,0.3);
   }
 
   .action-btns { display: flex; gap: 8px; }
@@ -621,6 +621,12 @@
         <div class="type-card-desc">只需提供支付宝 UID<br>扫码唤起转账，手动确认到账</div>
         <div class="gold-dot"></div>
       </div>
+      <div class="type-card" onclick="selectUidSimpleType()">
+        <div class="type-card-icon">⚡</div>
+        <div class="type-card-name">UID 简易支付</div>
+        <div class="type-card-desc">只需提供支付宝 UID<br>输入金额后直接跳转支付宝转账</div>
+        <div class="gold-dot"></div>
+      </div>
       <div class="type-card" onclick="selectFaceType()">
         <div class="type-card-icon">💳</div>
         <div class="type-card-name">当面付进件</div>
@@ -913,9 +919,13 @@ function renderMerchants() {
     const dateStr = `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
     const keyClass = m.keyType === 'PKCS8' ? 'pkcs8' : 'pkcs1';
     const isUid = m.type === 'uid';
-    const typeLabel = isUid ? 'UID' : '当面付';
-    const typeBadgeClass = isUid ? 'type-uid' : 'type-face';
-    const idLabel = isUid ? maskString(m.alipayUid || '') : maskString(m.appId || '');
+    const isUidSimple = m.type === 'uid-simple';
+    const isFace = m.type === 'face';
+    let typeLabel = '当面付';
+    let typeBadgeClass = 'type-face';
+    if (isUid) { typeLabel = 'UID'; typeBadgeClass = 'type-uid'; }
+    if (isUidSimple) { typeLabel = '简易支付'; typeBadgeClass = 'type-uid-simple'; }
+    const idLabel = (isUid || isUidSimple) ? maskString(m.alipayUid || '') : maskString(m.appId || '');
     return `
       <tr>
         <td class="merchant-name">${escapeHtml(m.merchantName)}</td>
@@ -965,11 +975,24 @@ function maskPrivateKey(str) {
 }
 
 // ===== 进件类型选择 =====
+let currentUidAddType = 'uid'; // 'uid' or 'uid-simple'
+
 function openAddModal() {
   document.getElementById('typeSelectModal').classList.add('show');
 }
 
 function selectUidType() {
+  currentUidAddType = 'uid';
+  document.getElementById('typeSelectModal').classList.remove('show');
+  document.getElementById('uidModal').classList.add('show');
+  document.getElementById('inputUidMerchantName').value = '';
+  document.getElementById('inputUidPhone').value = '';
+  document.getElementById('inputAlipayUid').value = '';
+  setTimeout(() => document.getElementById('inputUidMerchantName').focus(), 100);
+}
+
+function selectUidSimpleType() {
+  currentUidAddType = 'uid-simple';
   document.getElementById('typeSelectModal').classList.remove('show');
   document.getElementById('uidModal').classList.add('show');
   document.getElementById('inputUidMerchantName').value = '';
@@ -1062,12 +1085,12 @@ async function submitUidMerchant() {
     const res = await fetch('/api/merchants/uid', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ merchantName: merchantName || 'UID商户', phone, alipayUid }),
+      body: JSON.stringify({ merchantName: merchantName || 'UID商户', phone, alipayUid, type: currentUidAddType }),
     });
     const json = await res.json();
 
     if (json.code === 'OK') {
-      showToast('UID 商户添加成功', 'success');
+      showToast(currentUidAddType === 'uid-simple' ? 'UID 简易支付商户添加成功' : 'UID 商户添加成功', 'success');
       closeAddModal();
       merchants.push(json.data);
       renderMerchants();
@@ -1096,19 +1119,24 @@ async function openMerchantDetail(id) {
     const d = json.data;
 
     const isUid = d.type === 'uid';
+    const isUidSimple = d.type === 'uid-simple';
+    const isFace = d.type === 'face';
+    let typeDisplay = '当面付';
+    if (isUid) typeDisplay = 'UID 进件';
+    if (isUidSimple) typeDisplay = 'UID 简易支付';
     const grid = document.getElementById('detailGrid');
     let html = `
       <div class="detail-item detail-full">
         <div class="detail-label">商户名称</div>
         <div class="detail-value">${escapeHtml(d.merchantName)}</div>
       </div>
-      <div class="detail-item"><div class="detail-label">进件类型</div><div class="detail-value">${isUid ? 'UID 进件' : '当面付'}</div></div>
+      <div class="detail-item"><div class="detail-label">进件类型</div><div class="detail-value">${typeDisplay}</div></div>
       <div class="detail-item"><div class="detail-label">手机号</div><div class="detail-value">${escapeHtml(d.phone || '')}</div></div>
       <div class="detail-item"><div class="detail-label">默认登录密码</div><div class="detail-value">yy123456</div></div>
       <div class="detail-item"><div class="detail-label">文件名</div><div class="detail-value">${escapeHtml(d.fileName)}</div></div>
       <div class="detail-item"><div class="detail-label">创建时间</div><div class="detail-value">${new Date(d.createdAt).toLocaleString()}</div></div>
     `;
-    if (isUid) {
+    if (isUid || isUidSimple) {
       html += `<div class="detail-item detail-full"><div class="detail-label">支付宝 UID</div><div class="detail-value">${escapeHtml(d.alipayUid || '')}</div></div>`;
     } else {
       html += `

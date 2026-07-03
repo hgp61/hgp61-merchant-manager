@@ -56,6 +56,9 @@ app.use((req, res, next) => {
 
 const CONFIG = {
 
+  // 商户类型: 'uid' 或 'uid-simple'（由商户管理系统注入）
+  type: 'uid',
+
   // 【必填】支付宝 UID（你的支付宝唯一用户 ID）
   // 获取方式：打开支付宝 APP → 我的 → 点击头像 → 个人信息页查看"用户 ID"
   alipayUid: '2088522254750914',
@@ -243,6 +246,51 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
     let useApi = false;
     let frontendBaseUrl = '';  // 将从 req.body.base_url 获取
     let effectiveBaseUrl = '';   // 最终使用的跳转地址
+
+    // ===== 模式 C：UID 简易支付（直接跳转，不生成二维码）=====
+    if (CONFIG.type === 'uid-simple') {
+      if (!CONFIG.alipayUid) {
+        return res.status(400).json({
+          code: 'CONFIG_ERROR',
+          message: '请在 index.js 的 CONFIG 中填写 alipayUid（支付宝用户ID）',
+        });
+      }
+      const bizData = JSON.stringify({ s: 'money', u: CONFIG.alipayUid, a: parseFloat(amount).toFixed(2), m: subject });
+      qrContent = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(bizData)}`;
+      console.log(`>>> [UID收银台] UID 简易支付，直接跳转: ${outTradeNo}, 金额: ¥${amount}`);
+
+      cashierOrders.set(outTradeNo, {
+        amount, subject, body,
+        qrCode: qrContent,
+        status: 'waiting',
+        useApi: false,
+        createdAt: Date.now(),
+      });
+      setTimeout(() => cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
+
+      adminOrders.push({
+        outTradeNo,
+        amount: parseFloat(amount).toFixed(2),
+        subject,
+        status: 'generated',
+        useApi: false,
+        createdAt: new Date().toISOString(),
+        paidAt: null,
+      });
+      await saveOrders();
+
+      return res.json({
+        code: 'OK',
+        out_trade_no: outTradeNo,
+        qr_code: qrContent,
+        qr_image: '',
+        amount,
+        subject,
+        use_api: false,
+        use_direct_redirect: true,
+        message: '正在跳转支付宝...',
+      });
+    }
 
     // ===== 模式 B：使用第三方 API =====
     if (CONFIG.paymentApi && CONFIG.apiKey) {

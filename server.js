@@ -311,6 +311,9 @@ function generateMerchantZip(config) {
 function injectUidConfig(templateIndexJs, config) {
   let result = templateIndexJs;
   result = result.replace(/alipayUid:\s*['"].*?['"],/, `alipayUid: '${config.alipayUid}',`);
+  if (config.type) {
+    result = result.replace(/type:\s*['"].*?['"],/, `type: '${config.type}',`);
+  }
   if (config.merchantName) {
     result = result.replace(/merchantName:\s*['"].*?['"],/, `merchantName: '${config.merchantName}',`);
   }
@@ -479,7 +482,8 @@ app.post('/api/merchants', requireAuth, (req, res) => {
 });
 
 app.post('/api/merchants/uid', requireAuth, (req, res) => {
-  const { merchantName, phone, alipayUid } = req.body;
+  const { merchantName, phone, alipayUid, type } = req.body;
+  const merchantType = type === 'uid-simple' ? 'uid-simple' : 'uid';
   if (!phone || !/^1\d{10}$/.test(phone.trim())) {
     return res.json({ code: 'FAIL', message: '请输入有效的 11 位手机号' });
   }
@@ -500,8 +504,8 @@ app.post('/api/merchants/uid', requireAuth, (req, res) => {
   const defaultPassword = 'yy123456';
 
   const merchant = {
-    id, type: 'uid',
-    merchantName: merchantName || 'UID商户',
+    id, type: merchantType,
+    merchantName: merchantName || (merchantType === 'uid-simple' ? 'UID简易商户' : 'UID商户'),
     phone: phone.trim(),
     password: hashPwd(defaultPassword),
     alipayUid: uid,
@@ -516,6 +520,7 @@ app.post('/api/merchants/uid', requireAuth, (req, res) => {
       merchantName: merchantName || '',
       merchantPhone: phone.trim(),
       merchantPassword: defaultPassword,
+      type: merchantType,
     });
     fs.writeFileSync(path.join(DATA_DIR, `${fileName}.zip`), zipBuffer);
     merchant.zipGenerated = true;
@@ -530,7 +535,7 @@ app.post('/api/merchants/uid', requireAuth, (req, res) => {
 
   getMerchantRuntime(id, merchant);
 
-  res.json({ code: 'OK', data: { ...merchant, password: undefined }, message: 'UID 商户添加成功' });
+  res.json({ code: 'OK', data: { ...merchant, password: undefined }, message: merchantType === 'uid-simple' ? 'UID 简易支付商户添加成功' : 'UID 商户添加成功' });
 });
 
 app.get('/api/merchants/:id', requireAuth, (req, res) => {
@@ -968,9 +973,28 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
 
   const outTradeNo = `QR_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-  if (m.type === 'uid') {
-    // ===== UID 收银台 =====
-    let qrContent = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(JSON.stringify({ s: 'money', u: m.alipayUid, a: amtNum.toFixed(2), m: subject }))}`;
+  if (m.type === 'uid' || m.type === 'uid-simple') {
+    // ===== UID / UID 简易支付 收银台 =====
+    const alipaysUrl = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(JSON.stringify({ s: 'money', u: m.alipayUid, a: amtNum.toFixed(2), m: subject }))}`;
+
+    if (m.type === 'uid-simple') {
+      // UID 简易支付: 直接返回 alipays:// 链接，前端直接跳转，不生成二维码
+      rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: alipaysUrl, status: 'waiting', createdAt: Date.now() });
+      setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
+
+      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null });
+      saveMerchantFile(m.id, 'orders', rt.orders);
+
+      return res.json({
+        code: 'OK', out_trade_no: outTradeNo, qr_code: alipaysUrl, qr_image: '',
+        amount, subject, use_api: false,
+        use_direct_redirect: true,
+        message: '正在跳转支付宝...',
+      });
+    }
+
+    // UID 标准模式: 生成二维码
+    let qrContent = alipaysUrl;
 
     // 如果前端传了 base_url，使用 HTTPS 跳转方式
     const frontendBaseUrl = req.body.base_url || '';
