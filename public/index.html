@@ -244,6 +244,64 @@
     border-color: var(--red);
   }
 
+  /* 商户开关 toggle */
+  .merchant-toggle {
+    position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer;
+  }
+  .merchant-toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(231,76,60,0.3); border-radius: 20px; transition: 0.3s;
+  }
+  .toggle-slider::before {
+    content: ''; position: absolute; height: 14px; width: 14px;
+    left: 3px; bottom: 3px; background: #ccc; border-radius: 50%; transition: 0.3s;
+  }
+  .merchant-toggle input:checked + .toggle-slider {
+    background: rgba(212,175,55,0.4);
+  }
+  .merchant-toggle input:checked + .toggle-slider::before {
+    transform: translateX(16px); background: var(--gold);
+  }
+
+  /* 限额设置区域 */
+  .mgr-limits-section {
+    margin-top: 20px; padding: 16px; border-radius: 10px;
+    background: rgba(212,175,55,0.04); border: 1px solid rgba(212,175,55,0.12);
+  }
+  .mgr-limits-title {
+    font-size: 14px; font-weight: 700; color: var(--gold); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .mgr-limits-row {
+    display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;
+  }
+  .mgr-limit-field { flex: 1; min-width: 140px; }
+  .mgr-limit-field label {
+    display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
+  }
+  .mgr-limit-field input {
+    width: 100%; padding: 8px 12px; border-radius: 6px;
+    background: rgba(0,0,0,0.3); border: 1px solid rgba(212,175,55,0.15);
+    color: var(--gold); font-size: 14px; font-family: inherit;
+  }
+  .mgr-limit-field input:focus {
+    outline: none; border-color: var(--gold);
+  }
+  .mgr-limit-hint {
+    font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.5;
+  }
+  .mgr-limit-save-btn {
+    padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+    background: linear-gradient(135deg, rgba(212,175,55,0.3), rgba(212,175,55,0.15));
+    border: 1px solid rgba(212,175,55,0.3); color: var(--gold); transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .mgr-limit-save-btn:hover {
+    background: linear-gradient(135deg, rgba(212,175,55,0.4), rgba(212,175,55,0.2));
+    border-color: var(--gold);
+  }
+
   /* 空状态 */
   .empty-state {
     text-align: center; padding: 64px 20px;
@@ -598,6 +656,7 @@
           <th>手机号</th>
           <th>私钥格式</th>
           <th>创建时间</th>
+          <th>收款</th>
           <th>操作</th>
         </tr>
       </thead>
@@ -926,6 +985,7 @@ function renderMerchants() {
     if (isUid) { typeLabel = 'UID'; typeBadgeClass = 'type-uid'; }
     if (isUidSimple) { typeLabel = '简易支付'; typeBadgeClass = 'type-uid-simple'; }
     const idLabel = (isUid || isUidSimple) ? maskString(m.alipayUid || '') : maskString(m.appId || '');
+    const isEnabled = m.enabled !== false; // default true
     return `
       <tr>
         <td class="merchant-name">${escapeHtml(m.merchantName)}</td>
@@ -934,6 +994,7 @@ function renderMerchants() {
         <td class="merchant-phone">${escapeHtml(m.phone || '')}</td>
         <td>${isUid ? '<span style="color:var(--text-dim);font-size:12px;">—</span>' : `<span class="key-badge ${keyClass}">${m.keyType}</span>`}</td>
         <td class="merchant-date">${dateStr}</td>
+        <td><label class="merchant-toggle"><input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleMerchantEnabled('${m.id}', this.checked)"><span class="toggle-slider"></span></label></td>
         <td>
           <div class="action-btns">
             <button class="btn-login-row" onclick="autoLoginMerchant('${m.id}')">登录</button>
@@ -1106,6 +1167,73 @@ async function submitUidMerchant() {
   }
 }
 
+// ===== 商户开关 =====
+async function toggleMerchantEnabled(id, enabled) {
+  try {
+    const res = await fetch(`/api/merchants/${id}/toggle`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ enabled })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      const m = merchants.find(x => x.id === id);
+      if (m) m.enabled = enabled;
+      showToast(enabled ? '已开启收款' : '已关闭收款', 'success');
+    } else {
+      showToast(json.message || '操作失败', 'error');
+      // 回滚开关状态
+      const m = merchants.find(x => x.id === id);
+      if (m) { m.enabled = !enabled; renderMerchants(); }
+    }
+  } catch (e) {
+    showToast('网络错误', 'error');
+    const m = merchants.find(x => x.id === id);
+    if (m) { m.enabled = !enabled; renderMerchants(); }
+  }
+}
+
+// ===== 保存商户管理限额 =====
+async function saveMgrLimits() {
+  if (!detailMerchantId) return;
+  const minVal = document.getElementById('mgrMinInput').value.trim();
+  const maxVal = document.getElementById('mgrMaxInput').value.trim();
+
+  // 校验
+  if (minVal && (isNaN(parseFloat(minVal)) || parseFloat(minVal) <= 0)) {
+    showToast('单笔最小金额请输入正数', 'error'); return;
+  }
+  if (maxVal && (isNaN(parseFloat(maxVal)) || parseFloat(maxVal) <= 0)) {
+    showToast('单笔最大金额请输入正数', 'error'); return;
+  }
+  if (minVal && maxVal && parseFloat(minVal) > parseFloat(maxVal)) {
+    showToast('单笔最小金额不能大于最大金额', 'error'); return;
+  }
+
+  const btn = document.getElementById('mgrLimitSaveBtn');
+  btn.disabled = true; btn.textContent = '保存中...';
+
+  try {
+    const res = await fetch(`/api/merchants/${detailMerchantId}/mgr-limits`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ minAmount: minVal, maxAmount: maxVal })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      const m = merchants.find(x => x.id === detailMerchantId);
+      if (m) { m.mgrMinAmount = json.data.minAmount; m.mgrMaxAmount = json.data.maxAmount; }
+      showToast('限额设置已保存', 'success');
+    } else {
+      showToast(json.message || '保存失败', 'error');
+    }
+  } catch (e) {
+    showToast('网络错误', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '保存限额';
+  }
+}
+
 // ===== 详情 =====
 async function openMerchantDetail(id) {
   detailMerchantId = id;
@@ -1147,6 +1275,31 @@ async function openMerchantDetail(id) {
       `;
     }
     grid.innerHTML = html;
+
+    // 限额设置区域
+    const limitsHtml = `
+      <div class="mgr-limits-section detail-full">
+        <div class="mgr-limits-title">⚡ 收款限额设置（优先级高于收款后台）</div>
+        <div class="mgr-limits-row">
+          <div class="mgr-limit-field">
+            <label>单笔最小金额 (¥)</label>
+            <input type="number" id="mgrMinInput" placeholder="留空 = 不限制" step="0.01" min="0"
+              value="${d.mgrMinAmount !== undefined && d.mgrMinAmount !== null ? d.mgrMinAmount : ''}">
+          </div>
+          <div class="mgr-limit-field">
+            <label>单笔最大金额 (¥)</label>
+            <input type="number" id="mgrMaxInput" placeholder="留空 = 不限制" step="0.01" min="0"
+              value="${d.mgrMaxAmount !== undefined && d.mgrMaxAmount !== null ? d.mgrMaxAmount : ''}">
+          </div>
+          <button class="mgr-limit-save-btn" id="mgrLimitSaveBtn" onclick="saveMgrLimits()">保存限额</button>
+        </div>
+        <div class="mgr-limit-hint">
+          此处设置的限额优先级高于收款后台设置的限额。例如：收款后台设置单笔最大 50000，此处设置单笔最大 10，则收银台最大金额为 10。留空表示不限制。
+        </div>
+      </div>
+    `;
+    grid.innerHTML += limitsHtml;
+
     document.getElementById('detailModal').classList.add('show');
   } catch (e) {
     showToast('加载详情失败', 'error');

@@ -628,6 +628,37 @@ app.put('/api/merchants/:id', requireAuth, (req, res) => {
   res.json({ code: 'OK', data: { ...merchant, password: undefined } });
 });
 
+// ===== 商户开关（启用/禁用收款） =====
+app.put('/api/merchants/:id/toggle', requireAuth, (req, res) => {
+  const list = loadMerchants();
+  const merchant = list.find(m => m.id === req.params.id);
+  if (!merchant) return res.status(404).json({ code: 'FAIL', message: '商户不存在' });
+
+  merchant.enabled = req.body.enabled !== false; // 默认 true
+  saveMerchants(list);
+  console.log(`[商户:${req.params.id}] 收款功能: ${merchant.enabled ? '已开启' : '已关闭'}`);
+  res.json({ code: 'OK', data: { enabled: merchant.enabled } });
+});
+
+// ===== 商户管理系统级限额设置 =====
+app.put('/api/merchants/:id/mgr-limits', requireAuth, (req, res) => {
+  const list = loadMerchants();
+  const merchant = list.find(m => m.id === req.params.id);
+  if (!merchant) return res.status(404).json({ code: 'FAIL', message: '商户不存在' });
+
+  const parseAmount = (v) => {
+    if (v === '' || v === null || v === undefined) return null;
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  };
+
+  merchant.mgrMinAmount = parseAmount(req.body.minAmount);
+  merchant.mgrMaxAmount = parseAmount(req.body.maxAmount);
+  saveMerchants(list);
+  console.log(`[商户:${req.params.id}] 管理限额更新: min=${merchant.mgrMinAmount}, max=${merchant.mgrMaxAmount}`);
+  res.json({ code: 'OK', data: { minAmount: merchant.mgrMinAmount, maxAmount: merchant.mgrMaxAmount } });
+});
+
 // ===== 一键部署商户收款后台到 GitHub =====
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const GITHUB_USER = 'hgp61';
@@ -950,18 +981,40 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
   const m = req.merchant;
   const rt = req.runtime;
 
+  // 商户收款开关检查
+  if (m.enabled === false) {
+    return res.status(403).json({ code: 'ERROR', message: '该商户已关闭收款功能，请联系管理员开启' });
+  }
+
   if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
     return res.status(400).json({ code: 'ERROR', message: '请输入有效金额' });
   }
 
-  // 限额检查
-  const limits = rt.limits;
+  // 限额检查：管理系统的限额优先于收款后台设置的限额
   const amtNum = parseFloat(amount);
-  if (limits.minAmount && amtNum < limits.minAmount) {
-    return res.status(400).json({ code: 'ERROR', message: `单笔金额不能低于 ¥${limits.minAmount.toFixed(2)}` });
+
+  // 管理系统级限额（优先级最高）
+  const mgrMin = m.mgrMinAmount !== undefined && m.mgrMinAmount !== null ? parseFloat(m.mgrMinAmount) : null;
+  const mgrMax = m.mgrMaxAmount !== undefined && m.mgrMaxAmount !== null ? parseFloat(m.mgrMaxAmount) : null;
+
+  // 收款后台设置的限额
+  const limits = rt.limits;
+  const localMin = limits.minAmount !== null && limits.minAmount !== undefined && limits.minAmount !== '' ? parseFloat(limits.minAmount) : null;
+  const localMax = limits.maxAmount !== null && limits.maxAmount !== undefined && limits.maxAmount !== '' ? parseFloat(limits.maxAmount) : null;
+
+  // 合并：管理系统限额优先（取更严格的值）
+  const effectiveMin = mgrMin !== null ? mgrMin : localMin;
+  const effectiveMax = mgrMax !== null ? mgrMax : localMax;
+
+  // 如果两个都设置了，取更严格的（min 取更大的，max 取更小的）
+  const finalMin = (mgrMin !== null && localMin !== null) ? Math.max(mgrMin, localMin) : effectiveMin;
+  const finalMax = (mgrMax !== null && localMax !== null) ? Math.min(mgrMax, localMax) : effectiveMax;
+
+  if (finalMin !== null && !isNaN(finalMin) && amtNum < finalMin) {
+    return res.status(400).json({ code: 'ERROR', message: `单笔金额不能低于 ¥${finalMin.toFixed(2)}` });
   }
-  if (limits.maxAmount && amtNum > limits.maxAmount) {
-    return res.status(400).json({ code: 'ERROR', message: `单笔金额不能超过 ¥${limits.maxAmount.toFixed(2)}` });
+  if (finalMax !== null && !isNaN(finalMax) && amtNum > finalMax) {
+    return res.status(400).json({ code: 'ERROR', message: `单笔金额不能超过 ¥${finalMax.toFixed(2)}` });
   }
   if (limits.dayCount) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -1434,7 +1487,20 @@ app.get('/m/:id/api/network-info', (req, res) => {
 app.get('/m/:id/api/config', (req, res) => {
   const m = req.merchant;
   const uidMasked = m.alipayUid ? m.alipayUid.slice(0, 4) + '****' + m.alipayUid.slice(-4) : '未配置';
-  res.json({ code: 'OK', data: { alipayUid: uidMasked, hasUid: !!m.alipayUid, hasPaymentApi: false, merchantName: m.merchantName || '未配置', type: m.type || 'face', uid: m.alipayUid || '' } });
+  res.json({
+    code: 'OK',
+    data: {
+      alipayUid: uidMasked,
+      hasUid: !!m.alipayUid,
+      hasPaymentApi: false,
+      merchantName: m.merchantName || '未配置',
+      type: m.type || 'face',
+      uid: m.alipayUid || '',
+      enabled: m.enabled !== false, // 默认 true
+      mgrMinAmount: m.mgrMinAmount !== undefined ? m.mgrMinAmount : null,
+      mgrMaxAmount: m.mgrMaxAmount !== undefined ? m.mgrMaxAmount : null,
+    }
+  });
 });
 
 // ======================== 启动服务 ========================

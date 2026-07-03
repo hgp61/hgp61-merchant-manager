@@ -1120,6 +1120,7 @@ let lastQrImage = '';
 let currentCategory = '游戏充值';
 let cdOpen = false;
 let limitConfig = {};  // 从 /api/limits 拉取的限额配置
+let mgrConfig = { enabled: true, mgrMinAmount: null, mgrMaxAmount: null };  // 从 /api/config 拉取的管理系统配置
 
 // ==================== 自定义下拉框 ====================
 function toggleCategoryDropdown(e) {
@@ -1165,6 +1166,13 @@ function closeCategoryDropdown() {
 async function createQRCode() {
   // 每次生成前先拉取最新限额配置，确保后台修改能实时同步到收银台
   await fetchLimitConfig();
+  await fetchMgrConfig();
+
+  // 商户收款开关检查
+  if (!mgrConfig.enabled) {
+    showError('该商户已关闭收款功能，请联系管理员开启');
+    return;
+  }
 
   const amount = document.getElementById('amountInput').value.trim();
   const subject = currentCategory || '游戏充值';
@@ -1178,10 +1186,15 @@ async function createQRCode() {
     return;
   }
 
-  // 限额校验（来自后台设置）
+  // 限额校验：管理系统限额优先于收款后台限额
   const _amt = parseFloat(amount);
-  const _min = limitConfig.minAmount !== '' && limitConfig.minAmount !== null && limitConfig.minAmount !== undefined ? parseFloat(limitConfig.minAmount) : null;
-  const _max = limitConfig.maxAmount !== '' && limitConfig.maxAmount !== null && limitConfig.maxAmount !== undefined ? parseFloat(limitConfig.maxAmount) : null;
+  const _localMin = limitConfig.minAmount !== '' && limitConfig.minAmount !== null && limitConfig.minAmount !== undefined ? parseFloat(limitConfig.minAmount) : null;
+  const _localMax = limitConfig.maxAmount !== '' && limitConfig.maxAmount !== null && limitConfig.maxAmount !== undefined ? parseFloat(limitConfig.maxAmount) : null;
+  const _mgrMin = mgrConfig.mgrMinAmount !== null && mgrConfig.mgrMinAmount !== undefined ? parseFloat(mgrConfig.mgrMinAmount) : null;
+  const _mgrMax = mgrConfig.mgrMaxAmount !== null && mgrConfig.mgrMaxAmount !== undefined ? parseFloat(mgrConfig.mgrMaxAmount) : null;
+  // 合并：两个都设置时取更严格的值
+  const _min = (_mgrMin !== null && _localMin !== null) ? Math.max(_mgrMin, _localMin) : (_mgrMin !== null ? _mgrMin : _localMin);
+  const _max = (_mgrMax !== null && _localMax !== null) ? Math.min(_mgrMax, _localMax) : (_mgrMax !== null ? _mgrMax : _localMax);
   if (_min !== null && !isNaN(_min) && _amt < _min) {
     showError(`最低支付金额为 ¥${_min.toFixed(2)}，请重新输入`);
     return;
@@ -1462,6 +1475,20 @@ async function fetchLimitConfig() {
 
 // 页面加载时拉取一次限额配置
 fetchLimitConfig();
+
+// ==================== 拉取管理系统配置（开关+限额） ====================
+async function fetchMgrConfig() {
+  try {
+    const res = await fetch('api/config');
+    const data = await res.json();
+    if (data.code === 'OK' && data.data) {
+      mgrConfig.enabled = data.data.enabled !== false;
+      mgrConfig.mgrMinAmount = data.data.mgrMinAmount !== undefined ? data.data.mgrMinAmount : null;
+      mgrConfig.mgrMaxAmount = data.data.mgrMaxAmount !== undefined ? data.data.mgrMaxAmount : null;
+    }
+  } catch (e) {}
+}
+fetchMgrConfig();
 
 </script>
 </body>
