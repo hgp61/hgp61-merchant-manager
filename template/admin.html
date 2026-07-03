@@ -3786,6 +3786,11 @@ function renderMerchantQRCode() {
 
   var cashierUrl = window.location.origin + window.location.pathname.replace(/admin\.html$/, 'cashier.html');
 
+  // 先设置容器 CSS 限制，防止 qrcodejs 生成的 400x400 图片初始闪烁放大
+  box.style.width = '200px';
+  box.style.height = '200px';
+  box.style.overflow = 'hidden';
+
   // qrcodejs API：直接在容器内创建
   _merchantQrInstance = new QRCode(box, {
     text: cashierUrl,
@@ -3834,12 +3839,12 @@ function downloadMerchantQRImage() {
     ctx.imageSmoothingQuality = 'high';
 
     // ====== 背景（黑金流光） ======
-    var bgGrad = ctx.createLinearGradient(0, 0, w, h);
-    bgGrad.addColorStop(0, '#0a0703');    // 左上深黑
-    bgGrad.addColorStop(0.3, '#121008'); // 暗褐过渡
-    bgGrad.addColorStop(0.5, '#1a1508'); // 中间金色光带
-    bgGrad.addColorStop(0.7, '#121008'); // 暗褐过渡
-    bgGrad.addColorStop(1, '#0a0703');   // 右下深黑
+    var bgGrad = ctx.createRadialGradient(w/2, h*0.35, 50, w/2, h*0.5, w*0.9);
+    bgGrad.addColorStop(0, '#2a2010');     // 中心金色光晕
+    bgGrad.addColorStop(0.25, '#1e1808');  // 金褐过渡
+    bgGrad.addColorStop(0.5, '#100c04');   // 暗黑
+    bgGrad.addColorStop(0.75, '#1e1808');  // 金褐过渡
+    bgGrad.addColorStop(1, '#0a0703');     // 边缘深黑
     ctx.fillStyle = bgGrad;
     roundRect(ctx, 0, 0, w, h, 64, true, false);
 
