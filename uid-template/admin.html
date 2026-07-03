@@ -1551,7 +1551,7 @@
     <a href="#" onclick="switchPage('manage')" id="navManage">商户管理</a>
     <a href="#" onclick="switchPage('orders')" id="navOrders">订单中心</a>
     <a href="#" onclick="switchPage('limits')" id="navLimits">限额设置</a>
-    <a href="#" onclick="switchPage('security')" id="navSecurity">安全设置</a>
+    <a href="#" onclick="openSecurityOverlay()" id="navSecurity">安全设置</a>
   </div>
   <div class="topnav-right">
     <button class="topnav-logout" onclick="logout()">
@@ -3022,6 +3022,10 @@ let refundOutTradeNo = '';
 
 // 点击退款按钮 → 先检查安全密码设置
 function handleRefundClick(outTradeNo, amount) {
+  if (securityData.locked) {
+    showAlert('今日退款验证已锁定，无法退款，请明天再试');
+    return;
+  }
   if (securityData.skipPassword) {
     // 免密模式 → 直接打开退款弹窗
     openRefundModal(outTradeNo, amount);
@@ -3534,7 +3538,7 @@ function closePromptDialog(ok) {
 
 // ==================== 安全设置页面 ====================
 
-let securityData = { hasPassword: false, skipPassword: false };
+let securityData = { hasPassword: false, skipPassword: false, locked: false };
 // verifyAttemptsLeft/verifyAttemptsFailed: 安全验证尝试计数
 let verifyAttemptsLeft = 3;
 let verifyAttemptsFailed = 0;
@@ -3941,6 +3945,7 @@ function switchPage(page) {
   var navManage = document.getElementById('navManage');
   var navOrders = document.getElementById('navOrders');
   var navLimits = document.getElementById('navLimits');
+  var navSecurity = document.getElementById('navSecurity');
 
   // 隐藏所有页面
   mainPage.style.display = 'none';
@@ -3948,11 +3953,19 @@ function switchPage(page) {
   if (ordersPage) ordersPage.style.display = 'none';
   var limitsPage = document.getElementById('limitsPage');
   if (limitsPage) limitsPage.style.display = 'none';
+  var secSetPage = document.getElementById('securitySetPage');
+  if (secSetPage) secSetPage.style.display = 'none';
   if (navHome) navHome.classList.remove('active');
   if (navManage) navManage.classList.remove('active');
   if (navOrders) navOrders.classList.remove('active');
   if (navLimits) navLimits.classList.remove('active');
+  if (navSecurity) navSecurity.classList.remove('active');
   document.body.style.overflow = '';
+
+  // 关闭所有弹窗
+  document.getElementById('securityOverlay').classList.remove('show');
+  document.getElementById('changePwdOverlay').classList.remove('show');
+  document.getElementById('pwdVerifyOverlay').classList.remove('show');
 
   if (page === 'home') {
     mainPage.style.display = '';
@@ -3971,13 +3984,6 @@ function switchPage(page) {
     document.getElementById('limitsPage').style.display = '';
     if (navLimits) navLimits.classList.add('active');
     loadLimitsConfig();
-  } else if (page === 'security') {
-    var secSetPage = document.getElementById('securitySetPage');
-    if (secSetPage) secSetPage.style.display = '';
-    var navSecurity = document.getElementById('navSecurity');
-    if (navSecurity) navSecurity.classList.add('active');
-    loadSecurityConfig();
-    loadSecurityConfig2();
   }
 }
 
@@ -4152,6 +4158,11 @@ async function changeSecurityPassword() {
 async function toggleSkipMode(e) {
   e.stopPropagation();
 
+  if (securityData.locked) {
+    showAlert('今日退款验证已锁定，无法修改免密退款设置，请明天再试');
+    return;
+  }
+
   if (!securityData.hasPassword) {
     showAlert('请先设置二级安全密码');
     return;
@@ -4173,6 +4184,9 @@ async function toggleSkipMode(e) {
     if (json.code === 'OK') {
       securityData.skipPassword = json.skipPassword;
       updateSecurityUI();
+      showAlert(json.message);
+    } else if (json.code === 'LOCKED') {
+      securityData.locked = true;
       showAlert(json.message);
     } else {
       showAlert(json.message);
@@ -4234,17 +4248,24 @@ async function submitVerifyPwd() {
       closePwdVerify();
       // 验证通过 → 打开原退款弹窗
       openRefundModal(outTradeNo, amount);
+    } else if (json.code === 'LOCKED') {
+      // 已锁定
+      securityData.locked = true;
+      showAlert(json.message);
+      closePwdVerify();
     } else {
+      // 密码错误
       verifyAttemptsLeft--;
       verifyAttemptsFailed++;
       updateAttemptInfo();
       document.getElementById('verifyPwdInput').value = '';
 
-      if (verifyAttemptsLeft <= 0) {
-        showAlert('已达到最大尝试次数，本次退款操作已取消');
+      if (json.failedAttempts >= 3 || verifyAttemptsLeft <= 0) {
+        securityData.locked = true;
+        showAlert('已达到最大尝试次数，今日退款已锁定，请明天再试');
         closePwdVerify();
       } else {
-        showAlert('密码错误！剩余 ' + verifyAttemptsLeft + ' 次机会');
+        showAlert('密码错误！剩余 ' + (json.remaining || verifyAttemptsLeft) + ' 次机会');
         document.getElementById('verifyPwdInput').focus();
       }
     }

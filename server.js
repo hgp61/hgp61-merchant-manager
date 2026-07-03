@@ -80,6 +80,9 @@ function getMerchantRuntime(id, merchant) {
       merchantContact: merchant.merchantName || '',
       merchantPhone: merchant.phone || '',
       merchantPassword: 'yy123456',
+      failedAttempts: 0,
+      failedAttemptDate: '',
+      lockDate: '',
     }),
     limits: loadMerchantFile(id, 'limits', {
       minAmount: null, maxAmount: null,
@@ -953,6 +956,12 @@ app.post('/m/:id/api/refund', express.json(), async (req, res) => {
   if (order.status !== 'paid') return res.status(400).json({ code: 'ERROR', message: '仅已支付的订单可以退款' });
   if (order.refund) return res.status(400).json({ code: 'ERROR', message: '该订单已退款' });
 
+  // 检查当天是否已锁定（即使免密退款也不能退款）
+  const today = new Date().toISOString().slice(0, 10);
+  if (rt.security.lockDate === today) {
+    return res.status(403).json({ code: 'LOCKED', message: '今日退款验证已锁定，无法退款' });
+  }
+
   const amount = refundAmount ? parseFloat(refundAmount).toFixed(2) : order.amount;
   const amountNum = parseFloat(amount);
   const orderAmountNum = parseFloat(order.amount);
@@ -998,11 +1007,15 @@ app.get('/m/:id/api/security', (req, res) => {
   const session = req.runtime.sessions.get(token);
   const phone = (session && Date.now() - session.createdAt < SESSION_TTL) ? session.phone : '';
   const sec = req.runtime.security;
+  const today = new Date().toISOString().slice(0, 10);
+  const locked = sec.lockDate === today;
   res.json({
     code: 'OK',
     data: {
       hasPassword: !!sec.passwordHash,
       skipPassword: sec.skipPassword,
+      locked: locked,
+      failedAttempts: sec.failedAttempts || 0,
       merchantName: getMerchantNameForSession(req),
       merchantContact: sec.merchantContact || '',
       merchantPhone: phone || sec.merchantPhone || '',
@@ -1053,22 +1066,77 @@ app.post('/m/:id/api/security/password', express.json(), async (req, res) => {
 app.post('/m/:id/api/security/verify', express.json(), (req, res) => {
   const rt = req.runtime;
   const { password } = req.body;
-  if (!rt.security.passwordHash) return res.json({ code: 'OK', verified: true, message: '未设置安全密码' });
+  const today = new Date().toISOString().slice(0, 10);
+  const sec = rt.security;
+
+  // 检查当天是否已锁定
+  if (sec.lockDate === today) {
+    return res.status(403).json({ code: 'LOCKED', verified: false, message: '今日退款验证已锁定，请明天再试' });
+  }
+
+  if (!sec.passwordHash) return res.json({ code: 'OK', verified: true, message: '未设置安全密码' });
   if (!password) return res.status(400).json({ code: 'ERROR', message: '请输入安全密码' });
+
   const hashFn = req.merchant.type === 'uid' ? hashSecurityPwdUid : hashSecurityPwd;
-  if (hashFn(password) === rt.security.passwordHash) return res.json({ code: 'OK', verified: true, message: '验证通过' });
-  return res.status(400).json({ code: 'ERROR', verified: false, message: '密码错误' });
+
+  if (hashFn(password) === sec.passwordHash) {
+    // 密码正确：重置连续输错计数
+    sec.failedAttempts = 0;
+    sec.failedAttemptDate = '';
+    saveMerchantFile(req.merchant.id, 'security', sec);
+    return res.json({ code: 'OK', verified: true, message: '验证通过' });
+  }
+
+  // 密码错误：检查日期并重置
+  if (sec.failedAttemptDate !== today) {
+    sec.failedAttempts = 0;
+    sec.failedAttemptDate = today;
+  }
+  sec.failedAttempts++;
+
+  const remaining = 3 - sec.failedAttempts;
+  if (sec.failedAttempts >= 3) {
+    sec.lockDate = today;
+    saveMerchantFile(req.merchant.id, 'security', sec);
+    return res.status(403).json({ code: 'LOCKED', verified: false, failedAttempts: sec.failedAttempts, message: '连续输错3次，今日退款已锁定，请明天再试' });
+  }
+
+  saveMerchantFile(req.merchant.id, 'security', sec);
+  return res.status(400).json({ code: 'ERROR', verified: false, failedAttempts: sec.failedAttempts, remaining: remaining, message: '密码错误，还剩 ' + remaining + ' 次机会' });
 });
 
 app.post('/m/:id/api/security/skip', express.json(), async (req, res) => {
   const rt = req.runtime;
   const { password, enable } = req.body;
-  if (!rt.security.passwordHash) return res.status(400).json({ code: 'ERROR', message: '请先设置二级安全密码' });
+  const today = new Date().toISOString().slice(0, 10);
+  const sec = rt.security;
+
+  if (sec.lockDate === today) {
+    return res.status(403).json({ code: 'LOCKED', message: '今日退款验证已锁定，无法修改免密退款设置' });
+  }
+  if (!sec.passwordHash) return res.status(400).json({ code: 'ERROR', message: '请先设置二级安全密码' });
   const hashFn = req.merchant.type === 'uid' ? hashSecurityPwdUid : hashSecurityPwd;
-  if (!password || hashFn(password) !== rt.security.passwordHash) return res.status(400).json({ code: 'ERROR', message: '安全密码错误' });
-  rt.security.skipPassword = !!enable;
-  saveMerchantFile(req.merchant.id, 'security', rt.security);
-  res.json({ code: 'OK', skipPassword: rt.security.skipPassword, message: `免密退款已${rt.security.skipPassword ? '开启' : '关闭'}` });
+  if (!password || hashFn(password) !== sec.passwordHash) {
+    // 记录输错
+    if (sec.failedAttemptDate !== today) {
+      sec.failedAttempts = 0;
+      sec.failedAttemptDate = today;
+    }
+    sec.failedAttempts++;
+    if (sec.failedAttempts >= 3) {
+      sec.lockDate = today;
+      saveMerchantFile(req.merchant.id, 'security', sec);
+      return res.status(403).json({ code: 'LOCKED', message: '连续输错3次，今日退款已锁定，请明天再试' });
+    }
+    saveMerchantFile(req.merchant.id, 'security', sec);
+    return res.status(400).json({ code: 'ERROR', message: '安全密码错误' });
+  }
+  // 密码正确：重置输错计数
+  sec.failedAttempts = 0;
+  sec.failedAttemptDate = '';
+  sec.skipPassword = !!enable;
+  saveMerchantFile(req.merchant.id, 'security', sec);
+  res.json({ code: 'OK', skipPassword: sec.skipPassword, message: `免密退款已${sec.skipPassword ? '开启' : '关闭'}` });
 });
 
 app.post('/m/:id/api/security/reset-by-paypwd', express.json(), async (req, res) => {
