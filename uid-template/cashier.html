@@ -1197,42 +1197,13 @@ async function createQRCode() {
     showLocalhostIps();
   }
 
-  // ===== UID 简易支付：在 await 之前同步跳转，确保在用户手势同步路径中执行 =====
+  // ===== UID 简易支付：直接跳 /pay 页面，让服务端 handleAlipayRedirect 处理跳转 =====
   if (IS_SIMPLE && MERCHANT_UID) {
-    const bizData = JSON.stringify({ s: 'money', u: MERCHANT_UID, a: parseFloat(amount).toFixed(2), m: subject });
-    const alipayScheme = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(bizData)}`;
-
-    // 检测是否在支付宝内置浏览器中
-    const isAlipayBrowser = /Alipay/i.test(navigator.userAgent);
-
     const payBtn = document.getElementById('payBtn');
     payBtn.disabled = true;
     payBtn.textContent = '跳转中...';
 
-    if (isAlipayBrowser) {
-      // 在支付宝内置浏览器中，直接使用 https 的支付宝 URL 让支付宝内部路由
-      // 使用 ds.alipay.com 作为 scheme 中转，支付宝内置浏览器会拦截并内部路由
-      const encodedScheme = encodeURIComponent(alipayScheme);
-      window.location.href = `https://ds.alipay.com/?scheme=${encodedScheme}`;
-    } else {
-      // 在其他浏览器中，直接使用 alipays:// 协议唤起支付宝 App
-      window.location.href = alipayScheme;
-      // 同时尝试 iframe 方式（某些浏览器需要）
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = alipayScheme;
-      document.body.appendChild(iframe);
-      setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 3000);
-      // 同时尝试 a 标签点击方式
-      const a = document.createElement('a');
-      a.href = alipayScheme;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { if (a.parentNode) a.parentNode.removeChild(a); }, 100);
-    }
-
-    // 异步创建订单（后台记录，不阻塞跳转）
+    // 先异步创建订单（后台记录，不阻塞跳转）
     fetch(`${API_BASE}cashier/qrcode`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1243,14 +1214,10 @@ async function createQRCode() {
       }
     }).catch(() => {});
 
-    // 2秒后检测跳转是否成功（页面仍可见说明跳转被拦截）
-    setTimeout(() => {
-      if (document.visibilityState !== 'hidden') {
-        showError('支付宝未自动打开，请确认已安装支付宝App');
-        payBtn.disabled = false;
-        setPayButtonText();
-      }
-    }, 2000);
+    // 直接跳转到 /pay 页面，服务端 handleAlipayRedirect 根据 UA 处理：
+    // 支付宝内置浏览器 → 302 跳 alipays://（可靠）
+    // 其他浏览器 → 返回 pay/index.html，用户点击按钮跳转
+    window.location.href = `${API_BASE}pay?amount=${encodeURIComponent(amount)}&uid=${encodeURIComponent(MERCHANT_UID)}&memo=${encodeURIComponent(subject)}`;
 
     return;
   }
