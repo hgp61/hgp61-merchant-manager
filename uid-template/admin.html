@@ -1153,6 +1153,17 @@
       inset 0 -1px 0 rgba(0,0,0,0.3);
     overflow: hidden;
   }
+  #merchant-qr-box {
+    width: 200px;
+    height: 200px;
+    margin: 0 auto;
+  }
+  #merchant-qr-box img,
+  #merchant-qr-box canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+  }
   .merchant-qr-panel::before {
     content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
     width: 120px; height: 2px; background: linear-gradient(90deg, transparent, #d4af37, transparent);
@@ -3774,8 +3785,8 @@ function renderMerchantQRCode() {
   // qrcodejs API：直接在容器内创建
   _merchantQrInstance = new QRCode(box, {
     text: cashierUrl,
-    width: 400,
-    height: 400,
+    width: 200,
+    height: 200,
     colorDark: '#b8860b',
     colorLight: '#ffffff',
     correctLevel: QRCode.CorrectLevel.H
