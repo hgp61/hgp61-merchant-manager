@@ -3848,7 +3848,7 @@ function downloadMerchantQRImage() {
     roundRect(ctx, 2, 2, w-4, h-4, 30, false, true);
 
     // ====== Logo 圆形区域（绘制真实 logo） ======
-    var ls = 120, lx = w/2 - ls/2, ly = 50;
+    var ls = 72, lx = w/2 - ls/2, ly = 50;
     ctx.save();
     ctx.beginPath();
     ctx.arc(w/2, ly+ls/2, ls/2, 0, Math.PI*2);
@@ -3903,7 +3903,7 @@ function downloadMerchantQRImage() {
     try { ctx.drawImage(qrImg, qbx+44, qby+44, 352, 352); } catch(e) {}
 
     // 二维码中心 Logo（不影响扫码，H级纠错可容忍30%遮挡）
-    var logoSize = 140;
+    var logoSize = 80;
     var logoCX = qbx + 44 + 352/2;
     var logoCY = qby + 44 + 352/2;
     // 白底圆
