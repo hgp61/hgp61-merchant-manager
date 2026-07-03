@@ -1203,10 +1203,10 @@ app.get('/m/:id/pay/', (req, res) => {
 
   const bizData = JSON.stringify({ s: 'money', u: uid, a: amount.toFixed(2), m: memo });
   const encodedBiz = encodeURIComponent(bizData);
-  // 只用一个正确的 scheme URL（appId=20000123 是支付宝转账）
-  const schemeUrl = `alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=${encodedBiz}`;
-  // 外部浏览器用 ds.alipay.com 中转
-  const dsUrl = `https://ds.alipay.com/?scheme=${encodeURIComponent(schemeUrl)}`;
+  // 支付宝内浏览器：用 alipay: 协议直接拉起转账（单冒号，支付宝内识别）
+  const inAppUrl = `alipay:platformapi/startapp?appId=20000123&actionType=scan&biz_data=${encodedBiz}`;
+  // 外部浏览器：用 ds.alipay.com 中转
+  const outAppUrl = `https://ds.alipay.com/?scheme=${encodeURIComponent('alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + encodedBiz)}`;
 
   res.send(`<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1262,21 +1262,22 @@ app.get('/m/:id/pay/', (req, res) => {
 <script>
 (function(){
   var isInAlipay = /AlipayClient|AliApp/i.test(navigator.userAgent);
-  var scheme = ${JSON.stringify(schemeUrl)};
-  var ds = ${JSON.stringify(dsUrl)};
-  var bizData = ${JSON.stringify(bizData)};
-  var targetUrl = isInAlipay ? scheme : ds;
+  var inAppUrl = ${JSON.stringify(inAppUrl)};
+  var outAppUrl = ${JSON.stringify(outAppUrl)};
+  var targetUrl = isInAlipay ? inAppUrl : outAppUrl;
   var payBtn = document.getElementById('payBtn');
 
   function doJump(){
     if(isInAlipay){
+      // 支付宝内：优先用 AlipayJSBridge，否则用 alipay: 协议
       if(window.AlipayJSBridge){
-        window.AlipayJSBridge.call('startApp',{appId:'20000123',query:'actionType=scan&biz_data='+encodeURIComponent(bizData)});
+        window.AlipayJSBridge.call('startApp',{appId:'20000123',query:'actionType=scan&biz_data=${encodedBiz}'});
       } else {
-        location.href = scheme;
+        location.href = inAppUrl;
       }
     } else {
-      location.href = ds;
+      // 外部浏览器：用 ds.alipay.com 中转
+      location.href = outAppUrl;
     }
   }
 
