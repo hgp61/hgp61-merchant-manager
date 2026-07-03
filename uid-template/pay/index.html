@@ -2,44 +2,46 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>黑金PAY</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>黑金PAY · 收款</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#070707;color:#d4af37;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;flex-direction:column;padding:24px;-webkit-tap-highlight-color:transparent}
-.icon{width:80px;height:80px;margin-bottom:28px}
-.logo{font-size:24px;font-weight:800;letter-spacing:8px;margin-bottom:6px;background:linear-gradient(135deg,#f0d77a,#d4af37,#b8860b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.brand{font-size:10px;color:rgba(212,175,55,0.35);margin-bottom:40px;letter-spacing:4px}
-.title{font-size:20px;font-weight:800;color:#d4af37;margin-bottom:14px;letter-spacing:1px}
-.sub{font-size:14px;color:rgba(255,255,255,0.35);line-height:2;margin-bottom:36px}
-.steps{text-align:left;display:inline-block}
-.step{font-size:14px;color:rgba(255,255,255,0.55);line-height:2.6;padding-left:30px;position:relative}
-.step-num{position:absolute;left:0;top:7px;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;font-size:11px;font-weight:800;text-align:center;line-height:20px}
-.footer{margin-top:48px;font-size:10px;color:rgba(255,255,255,0.12);letter-spacing:2px}
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif; background:#070707; color:#d4af37; display:flex; align-items:center; justify-content:center; min-height:100vh; text-align:center; flex-direction:column; padding:24px; -webkit-tap-highlight-color:transparent; }
+  .tip { text-align:center; max-width:320px; }
+  .tip-icon { font-size:48px; margin-bottom:20px; }
+  .tip-title { font-size:20px; font-weight:800; letter-spacing:2px; margin-bottom:12px; background:linear-gradient(135deg,#f0d77a,#d4af37); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .tip-desc { font-size:13px; color:rgba(255,255,255,0.35); line-height:1.8; }
 </style>
 </head>
 <body>
-  <div class="icon">
-    <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="40" cy="40" r="36" stroke="url(#g)" stroke-width="2"/>
-      <path d="M36 28 L36 52 M28 36 L36 28 L44 36" stroke="url(#g)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-      <defs>
-        <linearGradient id="g" x1="4" y1="4" x2="76" y2="76">
-          <stop offset="0%" stop-color="#f0d77a"/>
-          <stop offset="100%" stop-color="#b8860b"/>
-        </linearGradient>
-      </defs>
-    </svg>
+  <div class="tip" id="tip">
+    <div class="tip-icon">📱</div>
+    <div class="tip-title">请使用支付宝扫码</div>
+    <div class="tip-desc">为保护交易安全<br>请在支付宝中扫描此二维码</div>
   </div>
-  <div class="logo">黑金PAY</div>
-  <div class="brand">HEIJIN PAY</div>
-  <div class="title">请使用支付宝扫码</div>
-  <div class="sub">此收款码仅支持支付宝扫描</div>
-  <div class="steps">
-    <div class="step"><span class="step-num">1</span> 打开支付宝 App</div>
-    <div class="step"><span class="step-num">2</span> 点击首页「扫一扫」</div>
-    <div class="step"><span class="step-num">3</span> 扫描此二维码即可付款</div>
-  </div>
-  <div class="footer">BLACK GOLD PAY</div>
+
+<script>
+(function() {
+  // UA 检测：支付宝浏览器直接跳转 alipays://
+  var ua = navigator.userAgent || '';
+  var isAlipay = /AlipayClient|alipay/i.test(ua);
+  if (!isAlipay) return;  // 非支付宝，显示提示页
+
+  // 支付宝浏览器：解析 URL 参数，构造 alipays:// 链接并跳转
+  var params = new URLSearchParams(window.location.search);
+  var amount = params.get('amount') || '';
+  var uid = params.get('uid') || '';
+  var memo = params.get('memo') || '';
+
+  if (!amount || !uid) return;
+
+  var biz = JSON.stringify({ s:'money', u:uid, a:parseFloat(amount).toFixed(2), m:memo });
+  var ebiz = encodeURIComponent(biz);
+  var alipaysUrl = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz;
+
+  // 直接跳转
+  window.location.href = alipaysUrl;
+})();
+</script>
 </body>
 </html>
