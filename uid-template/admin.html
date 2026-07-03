@@ -3844,7 +3844,7 @@ function downloadMerchantQRImage() {
     roundRect(ctx, 2, 2, w-4, h-4, 30, false, true);
 
     // ====== Logo 圆形区域（绘制真实 logo） ======
-    var ls = 72, lx = w/2 - ls/2, ly = 50;
+    var ls = 72, lx = w/2 - ls/2, ly = 65;
     ctx.save();
     ctx.beginPath();
     ctx.arc(w/2, ly+ls/2, ls/2, 0, Math.PI*2);
@@ -3866,12 +3866,12 @@ function downloadMerchantQRImage() {
     ctx.fillStyle = '#f0d77a';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('黑金PAY', w/2, 220);
+    ctx.fillText('黑金PAY', w/2, 235);
 
     // slogan
     ctx.font = '24px sans-serif';
     ctx.fillStyle = 'rgba(212,175,55,0.5)';
-    ctx.fillText('安全收款 · 即时到账', w/2, 262);
+    ctx.fillText('安全收款 · 即时到账', w/2, 282);
 
     // badge
     var bW=260,bH=52,bX=(w-bW)/2,bY=298;
