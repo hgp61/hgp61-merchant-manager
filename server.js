@@ -67,10 +67,22 @@ function saveMerchantFile(id, name, data) {
 }
 
 function getMerchantRuntime(id, merchant) {
-  if (merchantRuntimes.has(id)) return merchantRuntimes.get(id);
+  // 如果有缓存的运行时且 SDK 已初始化，直接返回
+  if (merchantRuntimes.has(id)) {
+    const cached = merchantRuntimes.get(id);
+    // SDK 已正常初始化 → 直接复用
+    if (cached.alipaySdk) return cached;
+    // SDK 为 null 但商户没有当面付配置 → 复用缓存（无需重试）
+    if (merchant.type === 'uid' || !merchant.appId || !merchant.privateKey) return cached;
+    // SDK 为 null 但商户有当面付配置 → 尝试重新初始化 SDK
+    console.log(`[商户:${id}] 🔄 SDK 未初始化，重新尝试（配置可能已更新）...`);
+    initAlipaySdk(cached, id, merchant);
+    return cached;
+  }
 
   const runtime = {
     alipaySdk: null,
+    alipaySdkError: null,
     orders: loadMerchantFile(id, 'orders', []),
     cashierOrders: new Map(),
     security: loadMerchantFile(id, 'security', {
@@ -102,63 +114,65 @@ function getMerchantRuntime(id, merchant) {
     });
   }
 
-  // 当面付：创建 AlipaySdk 实例（参考黑金PAY收银台模板的简单可靠方式）
-  if (merchant.type !== 'uid' && merchant.appId && merchant.privateKey) {
-    // 规范化私钥：确保有正确的换行符（模板依赖 JSON.parse 还原 \n → 真实换行）
-    const rawKey = String(merchant.privateKey).trim();
-    // 确保 PEM 头尾后有换行（alipay-sdk 期望标准 PEM 格式）
-    const normalizedKey = rawKey
-      .replace(/-----BEGIN [A-Z ]+-----(?!\n)/g, '$&\n')
-      .replace(/(?<!\n)-----END [A-Z ]+-----/g, '\n$&');
-    const keyPreview = normalizedKey.substring(0, 40).replace(/\n/g, '\\n');
-    const keyPreviewLen = normalizedKey.length;
-
-    // 使用商户创建时确定的 keyType（默认为 PKCS8，与模板保持一致）
-    const preferredKeyType = merchant.keyType || 'PKCS8';
-    const altKeyType = preferredKeyType === 'PKCS8' ? 'PKCS1' : 'PKCS8';
-
-    let initSuccess = false;
-    let lastError = null;
-
-    // 先按存储的 keyType 初始化（与模板完全一致的参数结构）
-    for (const tryKeyType of [preferredKeyType, altKeyType]) {
-      try {
-        console.log(`[商户:${id}] 尝试 AlipaySdk(keyType=${tryKeyType}): appId=${merchant.appId}, keyLen=${keyPreviewLen}, preview=${keyPreview}...`);
-        runtime.alipaySdk = new AlipaySdk({
-          appId: String(merchant.appId),
-          privateKey: normalizedKey,
-          alipayPublicKey: String(merchant.alipayPublicKey || ''),
-          gateway: 'https://openapi.alipay.com/gateway.do',
-          keyType: tryKeyType,
-        });
-        console.log(`[商户:${id}] ✅ AlipaySdk 初始化成功 (keyType=${tryKeyType})`);
-
-        // 如果实际使用的 keyType 与存储不一致，更新存储
-        if (tryKeyType !== preferredKeyType) {
-          console.log(`[商户:${id}] ⚠️ keyType 已从 ${preferredKeyType} 自动修正为 ${tryKeyType}`);
-          const list = loadMerchants();
-          const m = list.find(x => x.id === id);
-          if (m) { m.keyType = tryKeyType; saveMerchants(list); }
-        }
-        initSuccess = true;
-        break;
-      } catch (e) {
-        lastError = e.message;
-        console.warn(`[商户:${id}] AlipaySdk(keyType=${tryKeyType}) 失败: ${e.message}`);
-        runtime.alipaySdk = null;
-      }
-    }
-
-    if (!initSuccess) {
-      console.error(`[商户:${id}] ❌ AlipaySdk 初始化全部失败 (PKCS8+PKCS1 均报错)`);
-      runtime.alipaySdkError = `AlipaySdk 初始化失败（双格式均已尝试）。错误: ${lastError}。请检查：1) appId="${merchant.appId}" 是否正确；2) 私钥是否完整（长度=${keyPreviewLen}）；3) 支付宝公钥是否匹配。`;
-    }
-  } else {
-    console.log(`[商户:${id}] 跳过 AlipaySdk 初始化: type=${merchant.type}, hasAppId=${!!merchant.appId}, hasPrivateKey=${!!merchant.privateKey}`);
-  }
+  // 当面付：初始化 SDK
+  initAlipaySdk(runtime, id, merchant);
 
   merchantRuntimes.set(id, runtime);
   return runtime;
+}
+
+function initAlipaySdk(runtime, id, merchant) {
+  if (merchant.type === 'uid' || !merchant.appId || !merchant.privateKey) {
+    console.log(`[商户:${id}] 跳过 AlipaySdk 初始化: type=${merchant.type}, hasAppId=${!!merchant.appId}, hasPrivateKey=${!!merchant.privateKey}`);
+    return;
+  }
+
+  // 规范化私钥：确保有正确的换行符
+  const rawKey = String(merchant.privateKey).trim();
+  const normalizedKey = rawKey
+    .replace(/-----BEGIN [A-Z ]+-----(?!\n)/g, '$&\n')
+    .replace(/(?<!\n)-----END [A-Z ]+-----/g, '\n$&');
+  const keyPreview = normalizedKey.substring(0, 40).replace(/\n/g, '\\n');
+  const keyPreviewLen = normalizedKey.length;
+
+  const preferredKeyType = merchant.keyType || 'PKCS8';
+  const altKeyType = preferredKeyType === 'PKCS8' ? 'PKCS1' : 'PKCS8';
+
+  let initSuccess = false;
+  let lastError = null;
+
+  for (const tryKeyType of [preferredKeyType, altKeyType]) {
+    try {
+      console.log(`[商户:${id}] 尝试 AlipaySdk(keyType=${tryKeyType}): appId=${merchant.appId}, keyLen=${keyPreviewLen}, preview=${keyPreview}...`);
+      runtime.alipaySdk = new AlipaySdk({
+        appId: String(merchant.appId),
+        privateKey: normalizedKey,
+        alipayPublicKey: String(merchant.alipayPublicKey || ''),
+        gateway: 'https://openapi.alipay.com/gateway.do',
+        keyType: tryKeyType,
+      });
+      console.log(`[商户:${id}] ✅ AlipaySdk 初始化成功 (keyType=${tryKeyType})`);
+      runtime.alipaySdkError = null;
+
+      if (tryKeyType !== preferredKeyType) {
+        console.log(`[商户:${id}] ⚠️ keyType 已从 ${preferredKeyType} 自动修正为 ${tryKeyType}`);
+        const list = loadMerchants();
+        const m = list.find(x => x.id === id);
+        if (m) { m.keyType = tryKeyType; saveMerchants(list); }
+      }
+      initSuccess = true;
+      break;
+    } catch (e) {
+      lastError = e.message;
+      console.warn(`[商户:${id}] AlipaySdk(keyType=${tryKeyType}) 失败: ${e.message}`);
+    }
+  }
+
+  if (!initSuccess) {
+    console.error(`[商户:${id}] ❌ AlipaySdk 初始化全部失败`);
+    runtime.alipaySdk = null;
+    runtime.alipaySdkError = `初始化失败（PKCS8+PKCS1 均已尝试）。错误: ${lastError}。请检查：1) appId="${merchant.appId}" 是否正确；2) 私钥是否完整（长度=${keyPreviewLen}）；3) 支付宝公钥是否匹配。`;
+  }
 }
 
 // ======================== 工具函数 ========================
@@ -920,7 +934,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
   // ===== 当面付 =====
   if (!rt.alipaySdk) {
     return res.status(500).json({
-      code: 'ERROR',
+      code: 'SDK_ERROR',
       message: '支付宝SDK未初始化，请检查商户配置',
       detail: rt.alipaySdkError || '商户缺少 appId 或 privateKey，或 keyType 不匹配',
       merchantType: m.type,
@@ -986,7 +1000,7 @@ app.get('/m/:id/cashier/check', async (req, res) => {
   }
 
   // 当面付：查支付宝
-  if (!rt.alipaySdk) return res.json({ code: 'ERROR', message: 'SDK未初始化', detail: rt.alipaySdkError || '缺少 appId/privateKey' });
+  if (!rt.alipaySdk) return res.json({ code: 'SDK_ERROR', message: 'SDK未初始化', detail: rt.alipaySdkError || '缺少 appId/privateKey' });
   try {
     const result = await rt.alipaySdk.exec('alipay.trade.query', { bizContent: { out_trade_no: outTradeNo } });
     const resp = result.alipay_trade_query_response || result;
