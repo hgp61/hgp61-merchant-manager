@@ -2332,7 +2332,7 @@ async function submitChangePwd() {
   }
 
   try {
-    const res = await fetch('/api/login/change-password', {
+    const res = await fetch('api/login/change-password', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2388,7 +2388,7 @@ async function submitForgotPwd() {
   }
 
   try {
-    const res = await fetch('/api/login/forgot-password', {
+    const res = await fetch('api/login/forgot-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2420,7 +2420,7 @@ async function checkLoginStatus() {
     return false;
   }
   try {
-    const res = await fetch('/api/login/check', {
+    const res = await fetch('api/login/check', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2474,7 +2474,7 @@ function fmtTime(isoStr) {
 // 加载订单列表
 async function loadOrders() {
   try {
-    const res = await fetch('/api/orders');
+    const res = await fetch('api/orders');
     const json = await res.json();
     if (json.code === 'OK') {
       allOrders = json.data;
@@ -3065,7 +3065,7 @@ async function confirmRefund() {
   btn.disabled = true;
 
   try {
-    const res = await fetch('/api/refund', {
+    const res = await fetch('api/refund', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ outTradeNo: refundOutTradeNo, refundAmount: amount }),
@@ -3116,7 +3116,7 @@ function fmtChartVal(val) {
 // 加载仪表盘数据
 async function loadDashboard() {
   try {
-    const res = await fetch('/api/orders');
+    const res = await fetch('api/orders');
     const json = await res.json();
     if (json.code !== 'OK') return;
     allOrders = json.data;
@@ -3559,7 +3559,7 @@ async function submitChangePwdFromPage() {
   }
 
   try {
-    const res = await fetch('/api/login/change-password', {
+    const res = await fetch('api/login/change-password', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3598,7 +3598,7 @@ async function setSecurityPassword2() {
     return;
   }
   try {
-    const res = await fetch('/api/security/password', {
+    const res = await fetch('api/security/password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': getToken() },
       body: JSON.stringify({ password: pwd1 })
@@ -3636,7 +3636,7 @@ async function changeSecurityPassword2() {
     return;
   }
   try {
-    const res = await fetch('/api/security/password', {
+    const res = await fetch('api/security/password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': getToken() },
       body: JSON.stringify({ oldPassword: oldPwd, password: newPwd1 })
@@ -3660,7 +3660,7 @@ async function changeSecurityPassword2() {
 // 加载页面内安全配置（安全设置页面用）
 async function loadSecurityConfig2() {
   try {
-    const res = await fetch('/api/security');
+    const res = await fetch('api/security');
     const json = await res.json();
     if (json.code === 'OK') {
       const hasPwd = json.data.hasPassword;
@@ -3674,7 +3674,7 @@ async function loadSecurityConfig2() {
 // 加载安全配置
 async function loadSecurityConfig() {
   try {
-    const res = await fetch('/api/security');
+    const res = await fetch('api/security');
     const json = await res.json();
     if (json.code === 'OK') {
       securityData = json.data;
@@ -4014,7 +4014,7 @@ function confirmLimitsReset() {
   });
   closeLimitsResetConfirm();
   // 同步清空后端限额配置
-  fetch('/api/limits', {
+  fetch('api/limits', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ minAmount: '', maxAmount: '', dayCount: '', dayAmount: '', monthCount: '', monthAmount: '' })
@@ -4028,7 +4028,7 @@ function confirmLimitsReset() {
 
 // ===== 限额设置 =====
 function loadLimitsConfig() {
-  fetch('/api/limits').then(function(r) { return r.json(); }).then(function(data) {
+  fetch('api/limits').then(function(r) { return r.json(); }).then(function(data) {
     var c = data.data || data.config || {};
     if (c.minAmount !== null && c.minAmount !== undefined)
       document.getElementById('limitMinAmount').value = c.minAmount;
@@ -4058,7 +4058,7 @@ function saveLimitsConfig() {
     monthAmount: document.getElementById('limitMonthAmount').value
   };
 
-  fetch('/api/limits', {
+  fetch('api/limits', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config)
@@ -4103,7 +4103,7 @@ async function setSecurityPassword() {
   if (p1 !== p2) { showAlert('两次输入的密码不一致'); return; }
 
   try {
-    const res = await fetch('/api/security/password', {
+    const res = await fetch('api/security/password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newPassword: p1, confirmPassword: p2 })
@@ -4130,7 +4130,7 @@ async function changeSecurityPassword() {
   if (p1 !== p2) { showAlert('两次输入的新密码不一致'); return; }
 
   try {
-    const res = await fetch('/api/security/password', {
+    const res = await fetch('api/security/password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ oldPassword: oldP, newPassword: p1, confirmPassword: p2 })
@@ -4164,7 +4164,7 @@ async function toggleSkipMode(e) {
   if (!pwd) return;
 
   try {
-    const res = await fetch('/api/security/skip', {
+    const res = await fetch('api/security/skip', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: pwd, enable: newState })
@@ -4222,7 +4222,7 @@ async function submitVerifyPwd() {
   }
 
   try {
-    const res = await fetch('/api/security/verify', {
+    const res = await fetch('api/security/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: pwd })
@@ -4276,7 +4276,7 @@ async function submitResetPwd() {
   if (np1 !== np2) { showAlert('两次输入的新密码不一致'); return; }
 
   try {
-    const res = await fetch('/api/security/reset-by-paypwd', {
+    const res = await fetch('api/security/reset-by-paypwd', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ payPassword: payPwd, newPassword: np1, confirmPassword: np2 })
@@ -4331,7 +4331,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 防抖保存到服务端
     clearTimeout(merchantSaveTimer);
     merchantSaveTimer = setTimeout(function() {
-      fetch('/api/security/merchant-name', {
+      fetch('api/security/merchant-name', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: val }),
@@ -4347,7 +4347,7 @@ var contactSaveTimer = null;
 function saveMerchantInfo() {
   clearTimeout(contactSaveTimer);
   contactSaveTimer = setTimeout(function() {
-    fetch('/api/security/merchant-info', {
+    fetch('api/security/merchant-info', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

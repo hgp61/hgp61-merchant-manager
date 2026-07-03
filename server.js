@@ -1,81 +1,134 @@
+/**
+ * ============================================
+ *  黑金PAY 商户管理系统
+ *  管理端 + 收款后台 + 收银台 — 统一端口
+ * ============================================
+ */
+
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
+const os = require('os');
 const AdmZip = require('adm-zip');
+const { AlipaySdk } = require('alipay-sdk');
+const QRCode = require('qrcode');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.urlencoded({ extended: false }));
 
-// ===== 路径常量 =====
+// ======================== 路径常量 ========================
+
 const TEMPLATE_DIR = path.join(__dirname, 'template');
 const UID_TEMPLATE_DIR = path.join(__dirname, 'uid-template');
 const DATA_DIR = path.join(__dirname, 'data');
+const MERCHANT_DATA_DIR = path.join(DATA_DIR, 'merchants');
 const MERCHANTS_FILE = path.join(DATA_DIR, 'merchants.json');
 
-// ===== 管理员登录配置 =====
+// ======================== 管理员配置 ========================
+
 const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD = 'yy123456';
-const sessions = new Map(); // token -> { createdAt: Number, type: 'admin' }
-const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 小时
+const adminSessions = new Map();
+const SESSION_TTL = 24 * 60 * 60 * 1000;
 
-// ===== 数据目录初始化 =====
+// ======================== 数据目录初始化 ========================
+
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(MERCHANT_DATA_DIR)) fs.mkdirSync(MERCHANT_DATA_DIR, { recursive: true });
 if (!fs.existsSync(MERCHANTS_FILE)) fs.writeFileSync(MERCHANTS_FILE, '[]', 'utf-8');
 
-// ===== 工具函数 =====
-function loadMerchants() {
+// ======================== 商户运行时状态 ========================
+// 每个商户独立的内存状态，通过 merchantRuntime(id) 懒加载
+
+const merchantRuntimes = new Map(); // id → runtime
+
+function getMerchantDir(id) {
+  const dir = path.join(MERCHANT_DATA_DIR, id);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function loadMerchantFile(id, name, defaultVal) {
   try {
-    return JSON.parse(fs.readFileSync(MERCHANTS_FILE, 'utf-8'));
-  } catch {
-    return [];
+    const fp = path.join(getMerchantDir(id), name + '.json');
+    if (fs.existsSync(fp)) return JSON.parse(fs.readFileSync(fp, 'utf-8'));
+  } catch (e) { /* ignore */ }
+  return defaultVal;
+}
+
+function saveMerchantFile(id, name, data) {
+  fs.writeFileSync(path.join(getMerchantDir(id), name + '.json'), JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function getMerchantRuntime(id, merchant) {
+  if (merchantRuntimes.has(id)) return merchantRuntimes.get(id);
+
+  const runtime = {
+    alipaySdk: null,
+    orders: loadMerchantFile(id, 'orders', []),
+    cashierOrders: new Map(),
+    security: loadMerchantFile(id, 'security', {
+      passwordHash: null,
+      skipPassword: false,
+      merchantName: merchant.merchantName || '',
+      merchantContact: merchant.merchantName || '',
+      merchantPhone: merchant.phone || '',
+      merchantPassword: 'yy123456',
+    }),
+    limits: loadMerchantFile(id, 'limits', {
+      minAmount: null, maxAmount: null,
+      dayCount: null, dayAmount: null,
+      monthCount: null, monthAmount: null,
+    }),
+    sessions: new Map(),
+    allowedPhones: new Set([(merchant.phone || '').trim()].filter(Boolean)),
+    merchantNameMap: new Map(),
+  };
+
+  // 初始化 merchantNameMap
+  if (merchant.phone) {
+    runtime.merchantNameMap.set(merchant.phone.trim(), {
+      name: merchant.merchantName || '',
+      managerUrl: '',
+    });
   }
+
+  // 当面付：创建 AlipaySdk 实例
+  if (merchant.type !== 'uid' && merchant.appId && merchant.privateKey) {
+    try {
+      const keyType = (merchant.keyType === 'PKCS8' || (merchant.privateKey || '').includes('BEGIN PRIVATE KEY')
+        && !(merchant.privateKey || '').includes('BEGIN RSA PRIVATE KEY')) ? 'PKCS8' : 'PKCS1';
+      runtime.alipaySdk = new AlipaySdk({
+        appId: merchant.appId,
+        privateKey: merchant.privateKey,
+        alipayPublicKey: merchant.alipayPublicKey,
+        gateway: 'https://openapi.alipay.com/gateway.do',
+        keyType,
+      });
+    } catch (e) {
+      console.error(`[商户:${id}] AlipaySdk 初始化失败:`, e.message);
+    }
+  }
+
+  merchantRuntimes.set(id, runtime);
+  return runtime;
+}
+
+// ======================== 工具函数 ========================
+
+function loadMerchants() {
+  try { return JSON.parse(fs.readFileSync(MERCHANTS_FILE, 'utf-8')); }
+  catch { return []; }
 }
 
 function saveMerchants(list) {
   fs.writeFileSync(MERCHANTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
-}
-
-// 向收款后台同步商户名称
-function syncMerchantNameToBackend(merchantUrl, phone, merchantName) {
-  if (!merchantUrl || !phone) return;
-  const url = merchantUrl.replace(/\/$/, '') + '/api/sync-name';
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch (e) {
-    console.error('[sync-name] 收款后台地址无效:', url);
-    return;
-  }
-  const client = parsed.protocol === 'https:' ? https : http;
-  const payload = JSON.stringify({ phone, name: merchantName });
-  const options = {
-    method: 'POST',
-    hostname: parsed.hostname,
-    port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-    path: parsed.pathname + parsed.search,
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(payload)
-    }
-  };
-  const request = client.request(options, (response) => {
-    let data = '';
-    response.on('data', (chunk) => data += chunk);
-    response.on('end', () => {
-      console.log(`[sync-name] 同步商户名称到收款后台: ${url}, 响应: ${response.statusCode} ${data.slice(0, 200)}`);
-    });
-  });
-  request.on('error', (err) => {
-    console.error(`[sync-name] 同步商户名称到收款后台失败: ${url}, ${err.message}`);
-  });
-  request.write(payload);
-  request.end();
 }
 
 function genId() {
@@ -95,6 +148,22 @@ function hashPwd(pwd) {
   return crypto.createHash('sha256').update('heijin_admin_' + pwd + '_2024').digest('hex');
 }
 
+function hashMerchantPwd(pwd) {
+  return crypto.createHash('sha256').update('heijin_pay_' + pwd + '_security_2024').digest('hex');
+}
+
+function hashMerchantPwdUid(pwd) {
+  return crypto.createHash('sha256').update('heijin_pay_uid_' + pwd + '_security_2024').digest('hex');
+}
+
+function hashSecurityPwd(pwd) {
+  return crypto.createHash('sha256').update('heijin_pay_' + pwd + '_security_2024').digest('hex');
+}
+
+function hashSecurityPwdUid(pwd) {
+  return crypto.createHash('sha256').update('heijin_pay_uid_' + pwd + '_security_2024').digest('hex');
+}
+
 function cleanToken(header) {
   if (!header) return '';
   return String(header).replace(/^Bearer\s+/i, '').trim();
@@ -102,141 +171,104 @@ function cleanToken(header) {
 
 function requireAuth(req, res, next) {
   const token = cleanToken(req.headers.authorization);
-  const session = sessions.get(token);
-  if (session && Date.now() - session.createdAt < SESSION_TTL) {
-    return next();
-  }
+  const session = adminSessions.get(token);
+  if (session && Date.now() - session.createdAt < SESSION_TTL) return next();
   return res.status(401).json({ code: 'UNAUTH', message: '请先登录' });
 }
 
-// 将支付宝配置注入模板 index.js
+function syncMerchantNameToBackend(merchantUrl, phone, name) {
+  if (!merchantUrl || !phone) return;
+  const baseUrl = merchantUrl.replace(/\/$/, '');
+  const url = baseUrl + '/api/sync-name';
+  let parsed;
+  try { parsed = new URL(url); } catch (e) {
+    console.error(`[sync-name] 无效的 URL: ${merchantUrl}`);
+    return;
+  }
+  const client = parsed.protocol === 'https:' ? https : http;
+  const payload = JSON.stringify({ phone, name, managerUrl: 'http://localhost:' + PORT });
+  const options = {
+    method: 'POST',
+    hostname: parsed.hostname,
+    port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+    path: parsed.pathname,
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+  };
+  const req = client.request(options, (res) => {
+    let data = '';
+    res.on('data', (chunk) => data += chunk);
+    res.on('end', () => console.log(`[sync-name] 已同步到收款后台: phone=${phone}, name=${name}, 响应: ${res.statusCode}`));
+  });
+  req.on('error', (err) => console.error(`[sync-name] 同步失败: ${merchantUrl}, ${err.message}`));
+  req.write(payload);
+  req.end();
+}
+
+// ======================== ZIP 生成（保留） ========================
+
 function injectConfig(templateIndexJs, config) {
-  // 替换 appId（模板中为单引号空值）
-  let result = templateIndexJs.replace(
-    /appId:\s*['"].*?['"],/,
-    `appId: '${config.appId}',`
-  );
-  // 替换 privateKey（模板中为单引号空值，注入时改用反引号支持多行）
-  result = result.replace(
-    /privateKey:\s*['"][\s\S]*?['"],/,
-    () => `privateKey: \`${config.privateKey}\`,`
-  );
-  // 替换 alipayPublicKey
-  result = result.replace(
-    /alipayPublicKey:\s*['"].*?['"],/,
-    `alipayPublicKey: '${config.alipayPublicKey}',`
-  );
-  // 注入商户名称
+  let result = templateIndexJs;
+  result = result.replace(/appId:\s*['"].*?['"],/, `appId: '${config.appId}',`);
+  result = result.replace(/privateKey:\s*['"][\s\S]*?['"],/, () => `privateKey: \`${config.privateKey}\`,`);
+  result = result.replace(/alipayPublicKey:\s*['"].*?['"],/, `alipayPublicKey: '${config.alipayPublicKey}',`);
   if (config.merchantName) {
-    result = result.replace(
-      /merchantName:\s*['"].*?['"],/,
-      `merchantName: '${config.merchantName}',`
-    );
+    result = result.replace(/merchantName:\s*['"].*?['"],/, `merchantName: '${config.merchantName}',`);
   }
-  // 注入手机号（收款后台登录账号）
   if (config.merchantPhone) {
-    result = result.replace(
-      /merchantPhone:\s*['"].*?['"],/,
-      `merchantPhone: '${config.merchantPhone}',`
-    );
+    result = result.replace(/merchantPhone:\s*['"].*?['"],/, `merchantPhone: '${config.merchantPhone}',`);
   }
-  // 注入默认登录密码（明文，首次登录用）
   if (config.merchantPassword) {
-    result = result.replace(
-      /merchantPassword:\s*['"].*?['"],/,
-      `merchantPassword: '${config.merchantPassword}',`
-    );
+    result = result.replace(/merchantPassword:\s*['"].*?['"],/, `merchantPassword: '${config.merchantPassword}',`);
   }
   return result;
 }
 
-// 生成商户 ZIP 包
 function generateMerchantZip(config) {
   const zip = new AdmZip();
-  const files = ['index.js', 'cashier.html', 'admin.html', 'logo-pay.png', 'package.json'];
-
-  // index.js 需要注入配置
   const templateIndex = fs.readFileSync(path.join(TEMPLATE_DIR, 'index.js'), 'utf-8');
   const injectedIndex = injectConfig(templateIndex, config);
   zip.addFile('index.js', Buffer.from(injectedIndex, 'utf-8'));
-
-  console.log(`[生成ZIP] merchantName=${config.merchantName || '(空)'}, phone=${config.merchantPhone || '(空)'}`);
-
-  // 其他文件直接复制
-  files.slice(1).forEach(f => {
-    const buf = fs.readFileSync(path.join(TEMPLATE_DIR, f));
-    zip.addFile(f, buf);
+  ['cashier.html', 'admin.html', 'logo-pay.png', 'package.json'].forEach(f => {
+    zip.addFile(f, fs.readFileSync(path.join(TEMPLATE_DIR, f)));
   });
-
   return zip.toBuffer();
 }
 
-// 将 UID 配置注入 UID 模板 index.js
 function injectUidConfig(templateIndexJs, config) {
   let result = templateIndexJs;
-  // 替换 alipayUid
-  result = result.replace(
-    /alipayUid:\s*['"].*?['"],/,
-    `alipayUid: '${config.alipayUid}',`
-  );
-  // 注入商户名称
+  result = result.replace(/alipayUid:\s*['"].*?['"],/, `alipayUid: '${config.alipayUid}',`);
   if (config.merchantName) {
-    result = result.replace(
-      /merchantName:\s*['"].*?['"],/,
-      `merchantName: '${config.merchantName}',`
-    );
+    result = result.replace(/merchantName:\s*['"].*?['"],/, `merchantName: '${config.merchantName}',`);
   }
-  // 注入手机号
   if (config.merchantPhone) {
-    result = result.replace(
-      /merchantPhone:\s*['"].*?['"],/,
-      `merchantPhone: '${config.merchantPhone}',`
-    );
+    result = result.replace(/merchantPhone:\s*['"].*?['"],/, `merchantPhone: '${config.merchantPhone}',`);
   }
-  // 注入默认登录密码
   if (config.merchantPassword) {
-    result = result.replace(
-      /merchantPassword:\s*['"].*?['"],/,
-      `merchantPassword: '${config.merchantPassword}',`
-    );
+    result = result.replace(/merchantPassword:\s*['"].*?['"],/, `merchantPassword: '${config.merchantPassword}',`);
   }
   return result;
 }
 
-// 生成 UID 商户 ZIP 包
 function generateUidMerchantZip(config) {
   const zip = new AdmZip();
-  const files = ['index.js', 'cashier.html', 'admin.html', 'logo-pay.png', 'package.json'];
-
-  // index.js 需要注入配置（UID + 商户名 + 手机号 + 密码）
   const templateIndex = fs.readFileSync(path.join(UID_TEMPLATE_DIR, 'index.js'), 'utf-8');
   const injectedIndex = injectUidConfig(templateIndex, config);
   zip.addFile('index.js', Buffer.from(injectedIndex, 'utf-8'));
-
-  console.log(`[生成ZIP-UID] alipayUid=${(config.alipayUid || '').slice(0,4)}****, merchantName=${config.merchantName || '(空)'}, phone=${config.merchantPhone || '(空)'}`);
-
-  // 其他基础文件直接复制
-  files.slice(1).forEach(f => {
-    const buf = fs.readFileSync(path.join(UID_TEMPLATE_DIR, f));
-    zip.addFile(f, buf);
+  ['cashier.html', 'admin.html', 'logo-pay.png', 'package.json'].forEach(f => {
+    zip.addFile(f, fs.readFileSync(path.join(UID_TEMPLATE_DIR, f)));
   });
-
-  // 打包 node_modules（UID 模板已装好依赖，无需 npm install）
   const nodeModulesDir = path.join(UID_TEMPLATE_DIR, 'node_modules');
-  if (fs.existsSync(nodeModulesDir)) {
-    zip.addLocalFolder(nodeModulesDir, 'node_modules');
-  }
-
+  if (fs.existsSync(nodeModulesDir)) zip.addLocalFolder(nodeModulesDir, 'node_modules');
   return zip.toBuffer();
 }
 
-// ===== 管理员登录 API =====
+// ======================== 管理端 API ========================
 
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
   if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
     const token = crypto.randomBytes(16).toString('hex');
-    sessions.set(token, { createdAt: Date.now(), type: 'admin' });
+    adminSessions.set(token, { createdAt: Date.now(), type: 'admin' });
     return res.json({ code: 'OK', token, message: '登录成功' });
   }
   res.status(400).json({ code: 'FAIL', message: '账号或密码错误' });
@@ -244,48 +276,29 @@ app.post('/api/admin/login', (req, res) => {
 
 app.post('/api/admin/check', (req, res) => {
   const token = cleanToken(req.headers.authorization || req.body.token);
-  const session = sessions.get(token);
-  if (session && Date.now() - session.createdAt < SESSION_TTL) {
-    return res.json({ code: 'OK', loggedIn: true });
-  }
-  res.json({ code: 'OK', loggedIn: false });
+  const session = adminSessions.get(token);
+  res.json({ code: 'OK', loggedIn: !!(session && Date.now() - session.createdAt < SESSION_TTL) });
 });
 
 app.post('/api/admin/logout', (req, res) => {
-  const token = cleanToken(req.headers.authorization || req.body.token);
-  sessions.delete(token);
+  adminSessions.delete(cleanToken(req.headers.authorization || req.body.token));
   res.json({ code: 'OK' });
 });
 
-// ===== 受保护的 API =====
-
-// 获取商户列表
 app.get('/api/merchants', requireAuth, (req, res) => {
-  const list = loadMerchants().map(m => ({
-    ...m,
-    password: undefined, // 不返回密码
-  }));
+  const list = loadMerchants().map(m => ({ ...m, password: undefined }));
   res.json({ code: 'OK', data: list });
 });
 
-// 获取统计数据
 app.get('/api/stats', requireAuth, (req, res) => {
   const list = loadMerchants();
   const today = new Date().toDateString();
   const todayCount = list.filter(m => new Date(m.createdAt).toDateString() === today).length;
-  res.json({
-    code: 'OK',
-    data: {
-      total: list.length,
-      today: todayCount,
-    }
-  });
+  res.json({ code: 'OK', data: { total: list.length, today: todayCount } });
 });
 
-// 添加商户
 app.post('/api/merchants', requireAuth, (req, res) => {
   const { merchantName, phone, appId, privateKey, alipayPublicKey } = req.body;
-
   if (!phone || !/^1\d{10}$/.test(phone.trim())) {
     return res.json({ code: 'FAIL', message: '请输入有效的 11 位手机号' });
   }
@@ -293,64 +306,47 @@ app.post('/api/merchants', requireAuth, (req, res) => {
     return res.json({ code: 'FAIL', message: '请填写完整的支付宝配置信息' });
   }
 
-  // 处理私钥：如果用户只填了中间部分，自动补全头尾
   let trimmedKey = privateKey.trim();
   if (!trimmedKey.includes('-----BEGIN') && !trimmedKey.includes('-----END')) {
-    if (trimmedKey.startsWith('MII')) {
-      trimmedKey = '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----';
-    } else {
-      trimmedKey = '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
-    }
+    trimmedKey = trimmedKey.startsWith('MII')
+      ? '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----'
+      : '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
   }
-
-  // 验证私钥格式
   if (!trimmedKey.includes('BEGIN PRIVATE KEY') && !trimmedKey.includes('BEGIN RSA PRIVATE KEY')) {
-    return res.json({ code: 'FAIL', message: '私钥格式不正确，请粘贴完整的 PEM 格式私钥（含 BEGIN/END 行）' });
+    return res.json({ code: 'FAIL', message: '私钥格式不正确' });
   }
 
   const isPKCS8 = trimmedKey.includes('BEGIN PRIVATE KEY');
   const keyType = isPKCS8 ? 'PKCS8' : 'PKCS1';
 
-  // 格式化私钥
-  let formattedKey = trimmedKey;
-  if (!formattedKey.startsWith('-----BEGIN')) {
-    const match = formattedKey.match(/-----BEGIN[^-]*-----/);
-    if (match) formattedKey = formattedKey.substring(match.index);
-  }
-
   const id = genId();
   const fileName = genFileName();
   const now = new Date().toISOString();
   const defaultPassword = 'yy123456';
+  const alipayMerchantName = (merchantName || '').trim();
 
   const merchant = {
-    id,
-    type: 'face2face',
+    id, type: 'face2face',
     merchantName: merchantName || '未命名商户',
     phone: phone.trim(),
-    password: hashPwd(defaultPassword), // 默认登录密码哈希
-    appId,
-    privateKey: formattedKey,
+    password: hashPwd(defaultPassword),
+    appId, privateKey: trimmedKey,
     alipayPublicKey: alipayPublicKey.trim(),
-    keyType,
-    fileName,
+    keyType, fileName,
     createdAt: now,
-    merchantUrl: '', // 部署后由管理员配置
+    merchantUrl: '',
   };
-
-  const alipayMerchantName = (merchantName || '').trim();
 
   try {
     const zipBuffer = generateMerchantZip({
       appId: appId.trim(),
-      privateKey: formattedKey,
+      privateKey: trimmedKey,
       alipayPublicKey: alipayPublicKey.trim(),
       merchantName: alipayMerchantName,
       merchantPhone: phone.trim(),
       merchantPassword: defaultPassword,
     });
-    const zipPath = path.join(DATA_DIR, `${fileName}.zip`);
-    fs.writeFileSync(zipPath, zipBuffer);
+    fs.writeFileSync(path.join(DATA_DIR, `${fileName}.zip`), zipBuffer);
     merchant.zipGenerated = true;
   } catch (e) {
     merchant.zipGenerated = false;
@@ -361,20 +357,20 @@ app.post('/api/merchants', requireAuth, (req, res) => {
   list.push(merchant);
   saveMerchants(list);
 
+  // 预初始化运行时
+  getMerchantRuntime(id, merchant);
+
   res.json({ code: 'OK', data: { ...merchant, password: undefined }, message: '商户添加成功' });
 });
 
-// 添加 UID 商户
 app.post('/api/merchants/uid', requireAuth, (req, res) => {
   const { merchantName, phone, alipayUid } = req.body;
-
   if (!phone || !/^1\d{10}$/.test(phone.trim())) {
     return res.json({ code: 'FAIL', message: '请输入有效的 11 位手机号' });
   }
   if (!alipayUid || !alipayUid.trim()) {
     return res.json({ code: 'FAIL', message: '请填写支付宝 UID' });
   }
-
   const uid = alipayUid.trim();
   if (!/^\d{16}$/.test(uid)) {
     return res.json({ code: 'FAIL', message: '支付宝 UID 格式不正确，应为 16 位数字' });
@@ -389,8 +385,7 @@ app.post('/api/merchants/uid', requireAuth, (req, res) => {
   const defaultPassword = 'yy123456';
 
   const merchant = {
-    id,
-    type: 'uid',
+    id, type: 'uid',
     merchantName: merchantName || 'UID商户',
     phone: phone.trim(),
     password: hashPwd(defaultPassword),
@@ -407,8 +402,7 @@ app.post('/api/merchants/uid', requireAuth, (req, res) => {
       merchantPhone: phone.trim(),
       merchantPassword: defaultPassword,
     });
-    const zipPath = path.join(DATA_DIR, `${fileName}.zip`);
-    fs.writeFileSync(zipPath, zipBuffer);
+    fs.writeFileSync(path.join(DATA_DIR, `${fileName}.zip`), zipBuffer);
     merchant.zipGenerated = true;
   } catch (e) {
     merchant.zipGenerated = false;
@@ -419,90 +413,52 @@ app.post('/api/merchants/uid', requireAuth, (req, res) => {
   list.push(merchant);
   saveMerchants(list);
 
+  getMerchantRuntime(id, merchant);
+
   res.json({ code: 'OK', data: { ...merchant, password: undefined }, message: 'UID 商户添加成功' });
 });
 
-// 获取商户详情（受保护）
 app.get('/api/merchants/:id', requireAuth, (req, res) => {
   const list = loadMerchants();
   const merchant = list.find(m => m.id === req.params.id);
   if (!merchant) return res.status(404).json({ code: 'FAIL', message: '商户不存在' });
-  const m = { ...merchant, password: undefined };
-  res.json({ code: 'OK', data: m });
+  res.json({ code: 'OK', data: { ...merchant, password: undefined } });
 });
 
-// 下载商户文件（保留后端能力，但前端不再展示）
 app.get('/api/merchants/:id/download', requireAuth, (req, res) => {
   const list = loadMerchants();
   const merchant = list.find(m => m.id === req.params.id);
   if (!merchant) return res.status(404).json({ code: 'FAIL', message: '商户不存在' });
-
   const zipPath = path.join(DATA_DIR, `${merchant.fileName}.zip`);
   if (!fs.existsSync(zipPath)) return res.status(404).json({ code: 'FAIL', message: '文件不存在' });
-
   res.download(zipPath, `${merchant.fileName}.zip`);
 });
 
-// 删除商户
 app.delete('/api/merchants/:id', requireAuth, (req, res) => {
   const list = loadMerchants();
   const idx = list.findIndex(m => m.id === req.params.id);
   if (idx === -1) return res.status(404).json({ code: 'FAIL', message: '商户不存在' });
-
   const merchant = list[idx];
   const zipPath = path.join(DATA_DIR, `${merchant.fileName}.zip`);
   if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
-
   list.splice(idx, 1);
   saveMerchants(list);
+  merchantRuntimes.delete(req.params.id);
   res.json({ code: 'OK', message: '删除成功' });
 });
 
-// ===== 向收款后台同步商户名称 =====
-function syncMerchantNameToBackend(merchantUrl, phone, name) {
-  if (!merchantUrl || !phone) return;
-  const baseUrl = merchantUrl.replace(/\/$/, '');
-  const url = baseUrl + '/api/sync-name';
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch (e) {
-    console.error(`[sync-name] 无效的 URL: ${merchantUrl}`);
-    return;
-  }
-  const client = parsed.protocol === 'https:' ? https : http;
-  const payload = JSON.stringify({ phone, name, managerUrl: 'http://localhost:3000' });
-  const options = {
-    method: 'POST',
-    hostname: parsed.hostname,
-    port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-    path: parsed.pathname,
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(payload)
-    }
-  };
-  const req = client.request(options, (res) => {
-    let data = '';
-    res.on('data', (chunk) => data += chunk);
-    res.on('end', () => {
-      console.log(`[sync-name] 已同步到收款后台: phone=${phone}, name=${name}, 响应: ${res.statusCode}`);
-    });
-  });
-  req.on('error', (err) => console.error(`[sync-name] 同步失败: ${merchantUrl}, ${err.message}`));
-  req.write(payload);
-  req.end();
-}
-
-// 更新商户（商户名、访问地址）
 app.put('/api/merchants/:id', requireAuth, (req, res) => {
   const list = loadMerchants();
   const merchant = list.find(m => m.id === req.params.id);
   if (!merchant) return res.status(404).json({ code: 'FAIL', message: '商户不存在' });
-
   if (req.body.merchantName !== undefined) {
     merchant.merchantName = req.body.merchantName;
-    // 同步新的商户名到收款后台
+    // 同步本地运行时
+    const rt = merchantRuntimes.get(merchant.id);
+    if (rt) {
+      rt.security.merchantName = req.body.merchantName;
+      saveMerchantFile(merchant.id, 'security', rt.security);
+    }
     syncMerchantNameToBackend(merchant.merchantUrl, merchant.phone, merchant.merchantName);
   }
   if (req.body.merchantUrl !== undefined) {
@@ -522,12 +478,9 @@ app.post('/api/merchants/:id/deploy', requireAuth, async (req, res) => {
   if (!merchant) return res.status(404).json({ code: 'FAIL', message: '商户不存在' });
 
   const merchantName = merchant.merchantName || merchant.phone;
-  // 生成安全的仓库名：中文转拼音，去掉非法字符
   const repoName = merchantName.replace(/[^\w-]/g, '-').toLowerCase().substring(0, 50) + '-' + Date.now().toString(36);
-  const fileName = merchant.fileName || repoName;
 
   try {
-    // 步骤1：读取模板文件并注入配置
     const templateDir = merchant.type === 'uid' ? UID_TEMPLATE_DIR : TEMPLATE_DIR;
     const templateIndex = fs.readFileSync(path.join(templateDir, 'index.js'), 'utf-8');
     const cashierHtml = fs.readFileSync(path.join(templateDir, 'cashier.html'), 'utf-8');
@@ -536,7 +489,6 @@ app.post('/api/merchants/:id/deploy', requireAuth, async (req, res) => {
     const packageJson = fs.readFileSync(path.join(templateDir, 'package.json'), 'utf-8');
     const loginHtml = fs.readFileSync(path.join(templateDir, 'login.html'), 'utf-8');
 
-    // 构建注入配置
     const config = {
       appId: merchant.appId || '',
       privateKey: merchant.privateKey || '',
@@ -544,41 +496,32 @@ app.post('/api/merchants/:id/deploy', requireAuth, async (req, res) => {
       merchantName: merchant.merchantName || '',
       merchantPhone: merchant.phone || '',
       merchantPassword: 'yy123456',
-      merchantContact: merchant.merchantName || '',
     };
 
     const injectedIndex = injectConfig(templateIndex, config);
 
-    // 步骤2：创建 GitHub 仓库
     const createRepoRes = await fetch('https://api.github.com/user/repos', {
       method: 'POST',
       headers: {
         'Authorization': `token ${GITHUB_TOKEN}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/vnd.github.v3+json'
+        'Accept': 'application/vnd.github.v3+json',
       },
       body: JSON.stringify({
         name: repoName,
         description: `${merchantName} 收款后台`,
         private: false,
-        auto_init: false
-      })
+        auto_init: false,
+      }),
     });
 
     if (!createRepoRes.ok) {
       const errData = await createRepoRes.json();
-      // 如果仓库已存在，获取现有仓库信息
-      if (errData.errors && errData.errors.some(e => e.message.includes('already exists'))) {
-        console.log(`[deploy] 仓库 ${repoName} 已存在，跳过创建`);
-      } else {
+      if (!(errData.errors && errData.errors.some(e => e.message.includes('already exists')))) {
         throw new Error(`创建GitHub仓库失败: ${errData.message || createRepoRes.status}`);
       }
-    } else {
-      const repoData = await createRepoRes.json();
-      console.log(`[deploy] 已创建仓库: ${repoData.full_name}`);
     }
 
-    // 步骤3：上传所有文件到 GitHub
     const files = [
       { path: 'index.js', content: injectedIndex },
       { path: 'cashier.html', content: cashierHtml },
@@ -587,79 +530,55 @@ app.post('/api/merchants/:id/deploy', requireAuth, async (req, res) => {
       { path: 'package.json', content: packageJson },
       { path: 'login.html', content: loginHtml },
       { path: '.gitignore', content: 'node_modules/\ndata/\n*.log\n' },
-      { path: 'README.md', content: `# ${merchantName} 收款后台\n\n部署到 Railway：关联此仓库，Railway 将自动检测并部署。\n\n环境变量说明：\n- PORT: 端口，默认 3001\n- DATA_DIR: 数据存储目录` },
+      { path: 'README.md', content: `# ${merchantName} 收款后台\n\n部署到 Railway` },
     ];
 
-    const owner = GITHUB_USER;
     for (const file of files) {
-      // 先获取文件的当前 SHA（如果存在）
-      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${file.path}`, {
-        headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+      const getRes = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${repoName}/contents/${file.path}`, {
+        headers: { 'Authorization': `token ${GITHUB_TOKEN}` },
       });
       let sha = null;
       if (getRes.ok) {
         const existingFile = await getRes.json();
         sha = existingFile.sha;
       }
-
-      // 上传文件
-      const content = file.isBase64
-        ? file.content
-        : Buffer.from(file.content, 'utf-8').toString('base64');
-
-      const uploadRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${file.path}`, {
+      const content = file.isBase64 ? file.content : Buffer.from(file.content, 'utf-8').toString('base64');
+      await fetch(`https://api.github.com/repos/${GITHUB_USER}/${repoName}/contents/${file.path}`, {
         method: 'PUT',
         headers: {
           'Authorization': `token ${GITHUB_TOKEN}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/vnd.github.v3+json'
+          'Accept': 'application/vnd.github.v3+json',
         },
-        body: JSON.stringify({
-          message: `初始化 ${file.path}`,
-          content: content,
-          ...(sha ? { sha } : {})
-        })
+        body: JSON.stringify({ message: `初始化 ${file.path}`, content, ...(sha ? { sha } : {}) }),
       });
-
-      if (!uploadRes.ok) {
-        const err = await uploadRes.json();
-        console.error(`[deploy] 上传 ${file.path} 失败:`, err.message);
-      }
     }
 
-    // 步骤4：更新商户信息中的收款后台地址
-    const githubRepoUrl = `https://github.com/${owner}/${repoName}`;
     const cashierUrl = `https://${repoName}-production.up.railway.app`;
-
     merchant.merchantUrl = cashierUrl;
-    merchant.fileName = fileName;
     saveMerchants(list);
-
-    console.log(`[deploy] 部署完成: ${merchantName} -> ${githubRepoUrl}`);
 
     res.json({
       code: 'OK',
       data: {
-        merchantName: merchantName,
-        githubRepo: githubRepoUrl,
+        merchantName,
+        githubRepo: `https://github.com/${GITHUB_USER}/${repoName}`,
         railwayUrl: cashierUrl,
         nextSteps: [
           '1. 打开上方 GitHub 仓库地址',
           '2. 在 Railway 中新建项目，关联此 GitHub 仓库',
           '3. Railway 将自动检测并部署',
-          '4. 部署完成后，访问 Railway 提供的域名即可'
-        ]
+          '4. 部署完成后，访问 Railway 提供的域名即可',
+        ],
       },
-      message: 'GitHub 仓库已创建，请到 Railway 关联仓库进行部署'
+      message: 'GitHub 仓库已创建，请到 Railway 关联仓库进行部署',
     });
-
   } catch (err) {
     console.error('[deploy] 部署失败:', err);
     res.status(500).json({ code: 'FAIL', message: err.message || '部署失败' });
   }
 });
 
-// 收款后台回调：同步商户名称到商户管理系统
 app.post('/api/sync/merchant-name', express.json(), (req, res) => {
   const { phone, name } = req.body;
   if (!phone || !/^1\d{10}$/.test(String(phone).trim())) {
@@ -669,16 +588,650 @@ app.post('/api/sync/merchant-name', express.json(), (req, res) => {
   const safeName = String(name || '').trim();
   const list = loadMerchants();
   const merchant = list.find(m => m.phone === trimmed);
-  if (!merchant) {
-    return res.status(404).json({ code: 'FAIL', message: '未找到该手机号对应的商户' });
-  }
+  if (!merchant) return res.status(404).json({ code: 'FAIL', message: '未找到该手机号对应的商户' });
   merchant.merchantName = safeName;
   saveMerchants(list);
-  console.log(`[sync/merchant-name] 已更新商户名称: phone=${trimmed}, name=${safeName}`);
-  res.json({ code: 'OK', message: '商户名称已更新', data: { id: merchant.id, merchantName: safeName } });
+  // 同步运行时
+  const rt = merchantRuntimes.get(merchant.id);
+  if (rt) rt.security.merchantName = safeName;
+  res.json({ code: 'OK', message: '商户名称已更新' });
 });
 
+// ======================== 商户路由 ========================
+
+// 商户中间件：加载商户信息
+app.use('/m/:id', (req, res, next) => {
+  const list = loadMerchants();
+  const merchant = list.find(m => m.id === req.params.id);
+  if (!merchant) return res.status(404).send('商户不存在');
+  req.merchant = merchant;
+  req.runtime = getMerchantRuntime(merchant.id, merchant);
+  next();
+});
+
+// 商户中间件：商户登录鉴权（token 存在 req.headers.authorization 中）
+function merchantAuth(req, res, next) {
+  const token = cleanToken(req.headers.authorization);
+  const session = req.runtime.sessions.get(token);
+  if (session && Date.now() - session.createdAt < SESSION_TTL) {
+    req.sessionPhone = session.phone || '';
+    return next();
+  }
+  return res.status(401).json({ code: 'UNAUTH', message: '未登录或会话已过期' });
+}
+
+function getMerchantNameForSession(req) {
+  const phone = req.sessionPhone || '';
+  const entry = phone ? req.runtime.merchantNameMap.get(phone.trim()) : null;
+  return (entry && entry.name) || req.runtime.security.merchantName || req.merchant.merchantName || '';
+}
+
+// 商户静态文件（根据类型选择模板目录）
+app.use('/m/:id', (req, res, next) => {
+  const templateDir = req.merchant.type === 'uid' ? UID_TEMPLATE_DIR : TEMPLATE_DIR;
+  express.static(templateDir)(req, res, next);
+});
+
+// ===== 商户登录 API =====
+
+app.post('/m/:id/api/login', express.json(), (req, res) => {
+  const { phone, password } = req.body;
+  const rt = req.runtime;
+  const m = req.merchant;
+
+  if (!phone || !/^1\d{10}$/.test(phone.trim())) {
+    return res.status(400).json({ code: 'FAIL', message: '请输入有效的 11 位手机号' });
+  }
+  if (!password) {
+    return res.status(400).json({ code: 'FAIL', message: '请输入登录密码' });
+  }
+
+  const configPhone = (m.phone || '').trim();
+  if (phone.trim() !== configPhone && !rt.allowedPhones.has(phone.trim())) {
+    return res.status(400).json({ code: 'FAIL', message: '手机号或密码错误' });
+  }
+
+  if (password === 'yy123456') {
+    const token = crypto.randomBytes(16).toString('hex');
+    rt.sessions.set(token, { createdAt: Date.now(), phone: phone.trim() });
+    return res.json({ code: 'OK', token, message: '登录成功' });
+  }
+
+  const hashFn = m.type === 'uid' ? hashMerchantPwdUid : hashMerchantPwd;
+  const inputHash = hashFn(password);
+  if (inputHash === hashFn('yy123456')) {
+    const token = crypto.randomBytes(16).toString('hex');
+    rt.sessions.set(token, { createdAt: Date.now(), phone: phone.trim() });
+    return res.json({ code: 'OK', token, message: '登录成功' });
+  }
+
+  return res.status(400).json({ code: 'FAIL', message: '手机号或密码错误' });
+});
+
+app.post('/m/:id/api/login/check', (req, res) => {
+  const token = cleanToken(req.headers.authorization);
+  const session = req.runtime.sessions.get(token);
+  if (session && Date.now() - session.createdAt < SESSION_TTL) {
+    return res.json({ code: 'OK', phone: session.phone });
+  }
+  return res.status(401).json({ code: 'UNAUTH', message: '未登录或会话已过期' });
+});
+
+app.post('/m/:id/api/login/change-password', express.json(), (req, res) => {
+  const token = cleanToken(req.headers.authorization);
+  const session = req.runtime.sessions.get(token);
+  if (!session || Date.now() - session.createdAt >= SESSION_TTL) {
+    return res.status(401).json({ code: 'UNAUTH', message: '请先登录' });
+  }
+
+  const { oldPassword, newPassword, confirmPassword } = req.body;
+  if (!oldPassword) return res.status(400).json({ code: 'FAIL', message: '请输入原密码' });
+  if (!newPassword || newPassword.length < 6) return res.status(400).json({ code: 'FAIL', message: '新密码长度不能少于6位' });
+  if (newPassword !== confirmPassword) return res.status(400).json({ code: 'FAIL', message: '两次输入的新密码不一致' });
+
+  // 简化：接受原密码为 yy123456
+  if (oldPassword !== 'yy123456') {
+    return res.status(400).json({ code: 'FAIL', message: '原密码错误' });
+  }
+
+  // 密码存到 security
+  req.runtime.security.merchantPassword = newPassword;
+  saveMerchantFile(req.merchant.id, 'security', req.runtime.security);
+  res.json({ code: 'OK', message: '密码修改成功' });
+});
+
+app.post('/m/:id/api/login/forgot-password', express.json(), (req, res) => {
+  const { payPassword, newPassword, confirmPassword } = req.body;
+  if (!payPassword || payPassword.length < 6) return res.status(400).json({ code: 'FAIL', message: '请输入有效的支付宝支付密码' });
+  if (!newPassword || newPassword.length < 6) return res.status(400).json({ code: 'FAIL', message: '新密码长度不能少于6位' });
+  if (newPassword !== confirmPassword) return res.status(400).json({ code: 'FAIL', message: '两次输入的新密码不一致' });
+
+  req.runtime.security.merchantPassword = newPassword;
+  saveMerchantFile(req.merchant.id, 'security', req.runtime.security);
+  res.json({ code: 'OK', message: '密码重置成功' });
+});
+
+app.get('/m/:id/api/login/status', (req, res) => {
+  const token = cleanToken(req.headers.authorization);
+  const session = req.runtime.sessions.get(token);
+  if (session && Date.now() - session.createdAt < SESSION_TTL) {
+    req.sessionPhone = session.phone;
+    return res.json({ code: 'OK', loggedIn: true, phone: session.phone, merchantName: getMerchantNameForSession(req) });
+  }
+  return res.json({ code: 'OK', loggedIn: false });
+});
+
+// ===== 收银台 API =====
+
+// 当面付：生成收款码
+app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
+  const amount = String(req.body.amount || '').trim();
+  const subject = String(req.body.subject || '收款').trim();
+  const body = String(req.body.body || subject).trim();
+  const m = req.merchant;
+  const rt = req.runtime;
+
+  if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+    return res.status(400).json({ code: 'ERROR', message: '请输入有效金额' });
+  }
+
+  // 限额检查
+  const limits = rt.limits;
+  const amtNum = parseFloat(amount);
+  if (limits.minAmount && amtNum < limits.minAmount) {
+    return res.status(400).json({ code: 'ERROR', message: `单笔金额不能低于 ¥${limits.minAmount.toFixed(2)}` });
+  }
+  if (limits.maxAmount && amtNum > limits.maxAmount) {
+    return res.status(400).json({ code: 'ERROR', message: `单笔金额不能超过 ¥${limits.maxAmount.toFixed(2)}` });
+  }
+  if (limits.dayCount) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayCount = rt.orders.filter(o => (o.status === 'paid' || o.status === 'refunded' || o.status === 'partial_refund') && o.paidAt && new Date(o.paidAt) >= today).length;
+    if (todayCount >= limits.dayCount) {
+      return res.status(400).json({ code: 'ERROR', message: `今日交易笔数已达上限 (${limits.dayCount}笔)` });
+    }
+  }
+
+  const outTradeNo = `QR_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  if (m.type === 'uid') {
+    // ===== UID 收银台 =====
+    let qrContent = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(JSON.stringify({ s: 'money', u: m.alipayUid, a: amtNum.toFixed(2), m: subject }))}`;
+
+    // 如果前端传了 base_url，使用 HTTPS 跳转方式
+    const frontendBaseUrl = req.body.base_url || '';
+    const effectiveBaseUrl = frontendBaseUrl;
+    if (effectiveBaseUrl) {
+      qrContent = `${effectiveBaseUrl}m/${m.id}/pay/?amount=${amtNum.toFixed(2)}&uid=${m.alipayUid}&memo=${encodeURIComponent(subject)}`;
+    }
+
+    let qrDataUrl = '';
+    try {
+      qrDataUrl = await QRCode.toDataURL(qrContent, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+    } catch (qrErr) { console.error('二维码生成失败:', qrErr.message); }
+
+    rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: qrContent, status: 'waiting', createdAt: Date.now() });
+    setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
+
+    rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null });
+    saveMerchantFile(m.id, 'orders', rt.orders);
+
+    return res.json({
+      code: 'OK', out_trade_no: outTradeNo, qr_code: qrContent, qr_image: qrDataUrl,
+      amount, subject, use_api: false, message: effectiveBaseUrl ? '请使用支付宝扫码转账' : '⚠️ 未配置跳转地址，二维码可能被支付宝拦截',
+    });
+  }
+
+  // ===== 当面付 =====
+  if (!rt.alipaySdk) {
+    return res.status(500).json({ code: 'ERROR', message: '支付宝SDK未初始化，请检查商户配置' });
+  }
+
+  try {
+    const result = await rt.alipaySdk.exec('alipay.trade.precreate', {
+      bizContent: { out_trade_no: outTradeNo, total_amount: amtNum.toFixed(2), subject, body, timeout_express: '30m' },
+    });
+    const resp = result.alipay_trade_precreate_response || result;
+    const qrCode = resp.qrCode || resp.qr_code;
+
+    if (resp.code === '10000' && qrCode) {
+      rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode, status: 'waiting', createdAt: Date.now() });
+      setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
+
+      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null });
+      saveMerchantFile(m.id, 'orders', rt.orders);
+
+      let qrDataUrl = '';
+      try { qrDataUrl = await QRCode.toDataURL(qrCode, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } }); } catch (e) {}
+
+      return res.json({ code: 'OK', out_trade_no: outTradeNo, qr_code: qrCode, qr_image: qrDataUrl, amount, subject, message: '收款码已生成' });
+    } else {
+      return res.status(500).json({
+        code: 'ALIPAY_ERROR', message: '支付宝接口错误',
+        detail: JSON.stringify({ code: resp.code, sub_code: resp.subCode || resp.sub_code, msg: resp.msg }),
+        alipay_code: resp.code,
+      });
+    }
+  } catch (err) {
+    return res.status(500).json({ code: 'ERROR', message: '支付服务异常: ' + err.message });
+  }
+});
+
+// 查询支付状态
+app.get('/m/:id/cashier/check', async (req, res) => {
+  const m = req.merchant;
+  const rt = req.runtime;
+  const outTradeNo = (req.query.out_trade_no || '').trim();
+  if (!outTradeNo) return res.status(400).json({ code: 'ERROR', message: '缺少 out_trade_no' });
+
+  // 先查内存
+  const localOrder = rt.cashierOrders.get(outTradeNo);
+  if (localOrder && localOrder.status === 'paid') {
+    return res.json({ code: 'OK', status: 'paid', trade_no: localOrder.tradeNo });
+  }
+
+  const adminOrder = rt.orders.find(o => o.outTradeNo === outTradeNo);
+  if (!adminOrder) return res.json({ code: 'OK', status: 'waiting', message: '订单不存在' });
+  if (adminOrder.status === 'paid') {
+    const cOrder = rt.cashierOrders.get(outTradeNo) || {};
+    cOrder.status = 'paid'; cOrder.tradeNo = adminOrder.tradeNo || '';
+    rt.cashierOrders.set(outTradeNo, cOrder);
+    return res.json({ code: 'OK', status: 'paid', trade_no: adminOrder.tradeNo, amount: adminOrder.amount });
+  }
+
+  if (m.type === 'uid') {
+    return res.json({ code: 'OK', status: 'waiting' });
+  }
+
+  // 当面付：查支付宝
+  if (!rt.alipaySdk) return res.json({ code: 'ERROR', message: 'SDK未初始化' });
+  try {
+    const result = await rt.alipaySdk.exec('alipay.trade.query', { bizContent: { out_trade_no: outTradeNo } });
+    const resp = result.alipay_trade_query_response || result;
+    const tradeStatus = resp.tradeStatus || resp.trade_status;
+    const tradeNo = resp.tradeNo || resp.trade_no;
+
+    if (resp.code === '10000') {
+      if (tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED') {
+        adminOrder.status = 'paid';
+        adminOrder.paidAt = new Date().toISOString();
+        adminOrder.tradeNo = tradeNo;
+        saveMerchantFile(m.id, 'orders', rt.orders);
+        const cOrder = rt.cashierOrders.get(outTradeNo) || {};
+        cOrder.status = 'paid'; cOrder.tradeNo = tradeNo;
+        rt.cashierOrders.set(outTradeNo, cOrder);
+        return res.json({ code: 'OK', status: 'paid', trade_no: tradeNo, amount: adminOrder.amount });
+      }
+      // 首次查询到，更新为"支付中"
+      if (adminOrder.status === 'generated') {
+        adminOrder.status = 'paying';
+        saveMerchantFile(m.id, 'orders', rt.orders);
+      }
+      return res.json({ code: 'OK', status: 'waiting', trade_status: tradeStatus });
+    }
+    return res.json({ code: 'OK', status: 'waiting' });
+  } catch (err) {
+    return res.json({ code: 'ERROR', message: err.message });
+  }
+});
+
+// 支付宝异步通知（当面付）
+app.post('/m/:id/cashier/notify', express.urlencoded({ extended: false }), async (req, res) => {
+  const rt = req.runtime;
+  const outTradeNo = req.body.out_trade_no;
+  const tradeStatus = req.body.trade_status;
+
+  if (tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED') {
+    const cOrder = rt.cashierOrders.get(outTradeNo) || {};
+    cOrder.status = 'paid';
+    cOrder.tradeNo = req.body.trade_no;
+    rt.cashierOrders.set(outTradeNo, cOrder);
+
+    const adminOrder = rt.orders.find(o => o.outTradeNo === outTradeNo);
+    if (adminOrder) {
+      adminOrder.status = 'paid';
+      adminOrder.paidAt = new Date().toISOString();
+      adminOrder.tradeNo = req.body.trade_no;
+      saveMerchantFile(req.merchant.id, 'orders', rt.orders);
+    }
+  }
+  res.send('success');
+});
+
+// UID 手动确认到账
+app.post('/m/:id/cashier/confirm', express.json(), async (req, res) => {
+  const rt = req.runtime;
+  const { outTradeNo } = req.body;
+  if (!outTradeNo) return res.status(400).json({ code: 'ERROR', message: '缺少订单号' });
+
+  const order = rt.orders.find(o => o.outTradeNo === outTradeNo);
+  if (!order) return res.status(404).json({ code: 'ERROR', message: '订单不存在' });
+  if (order.status === 'paid' || order.status === 'confirmed') {
+    return res.status(400).json({ code: 'ERROR', message: '该订单已确认到账' });
+  }
+
+  order.status = 'paid';
+  order.paidAt = new Date().toISOString();
+  order.tradeNo = 'MANUAL_' + Date.now();
+  saveMerchantFile(req.merchant.id, 'orders', rt.orders);
+
+  const cOrder = rt.cashierOrders.get(outTradeNo);
+  if (cOrder) { cOrder.status = 'paid'; cOrder.tradeNo = order.tradeNo; rt.cashierOrders.set(outTradeNo, cOrder); }
+
+  res.json({ code: 'OK', message: '已确认到账', out_trade_no: outTradeNo });
+});
+
+// ===== 订单 API =====
+
+app.get('/m/:id/api/orders', (req, res) => {
+  const list = [...req.runtime.orders].reverse();
+  res.json({ code: 'OK', data: list, total: list.length });
+});
+
+app.post('/m/:id/api/orders', express.json(), async (req, res) => {
+  const rt = req.runtime;
+  const { outTradeNo, status } = req.body;
+  const order = rt.orders.find(o => o.outTradeNo === outTradeNo);
+  if (order) {
+    order.status = status;
+    if (status === 'paid') order.paidAt = new Date().toISOString();
+    saveMerchantFile(req.merchant.id, 'orders', rt.orders);
+  }
+  res.json({ code: 'OK' });
+});
+
+// ===== 退款 API =====
+
+app.post('/m/:id/api/refund', express.json(), async (req, res) => {
+  const m = req.merchant;
+  const rt = req.runtime;
+  const { outTradeNo, refundAmount } = req.body;
+  if (!outTradeNo) return res.status(400).json({ code: 'ERROR', message: '缺少订单号' });
+
+  const order = rt.orders.find(o => o.outTradeNo === outTradeNo);
+  if (!order) return res.status(404).json({ code: 'ERROR', message: '订单不存在' });
+  if (order.status !== 'paid') return res.status(400).json({ code: 'ERROR', message: '仅已支付的订单可以退款' });
+  if (order.refund) return res.status(400).json({ code: 'ERROR', message: '该订单已退款' });
+
+  const amount = refundAmount ? parseFloat(refundAmount).toFixed(2) : order.amount;
+  const amountNum = parseFloat(amount);
+  const orderAmountNum = parseFloat(order.amount);
+  if (amountNum <= 0 || amountNum > orderAmountNum) {
+    return res.status(400).json({ code: 'ERROR', message: `退款金额无效` });
+  }
+
+  const outRequestNo = `RF_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  if (m.type === 'uid') {
+    // UID：本地退款
+    order.refund = { refundNo: 'LOCAL_' + outRequestNo, refundAmount: amount, refundedAt: new Date().toISOString(), outRequestNo, note: '本地退款' };
+    order.status = amountNum >= orderAmountNum ? 'refunded' : 'partial_refund';
+    saveMerchantFile(m.id, 'orders', rt.orders);
+    return res.json({ code: 'OK', message: '退款已标记', refund_amount: amount });
+  }
+
+  // 当面付：调用支付宝退款
+  if (!rt.alipaySdk) return res.status(500).json({ code: 'ERROR', message: 'SDK未初始化' });
+  try {
+    const result = await rt.alipaySdk.exec('alipay.trade.refund', {
+      bizContent: { out_trade_no: outTradeNo, refund_amount: amount, out_request_no: outRequestNo },
+    });
+    const resp = result.alipay_trade_refund_response || result;
+
+    if (resp.code === '10000') {
+      order.refund = { refundNo: resp.tradeNo || resp.trade_no || '', refundAmount: amount, refundedAt: new Date().toISOString(), outRequestNo };
+      order.status = amountNum >= orderAmountNum ? 'refunded' : 'partial_refund';
+      saveMerchantFile(m.id, 'orders', rt.orders);
+      return res.json({ code: 'OK', message: '退款成功', refund_amount: amount });
+    } else {
+      return res.status(500).json({ code: 'ALIPAY_ERROR', message: resp.subMsg || resp.sub_msg || resp.msg || '退款失败' });
+    }
+  } catch (err) {
+    return res.status(500).json({ code: 'ERROR', message: '退款异常: ' + err.message });
+  }
+});
+
+// ===== 安全设置 API =====
+
+app.get('/m/:id/api/security', (req, res) => {
+  const token = cleanToken(req.headers.authorization);
+  const session = req.runtime.sessions.get(token);
+  const phone = (session && Date.now() - session.createdAt < SESSION_TTL) ? session.phone : '';
+  const sec = req.runtime.security;
+  res.json({
+    code: 'OK',
+    data: {
+      hasPassword: !!sec.passwordHash,
+      skipPassword: sec.skipPassword,
+      merchantName: getMerchantNameForSession(req),
+      merchantContact: sec.merchantContact || '',
+      merchantPhone: phone || sec.merchantPhone || '',
+    },
+  });
+});
+
+app.post('/m/:id/api/security/merchant-name', express.json(), async (req, res) => {
+  const rt = req.runtime;
+  const name = String(req.body.name || '').trim();
+  rt.security.merchantName = name;
+  // 同步到管理系统
+  const list = loadMerchants();
+  const merchant = list.find(m => m.id === req.merchant.id);
+  if (merchant) { merchant.merchantName = name; saveMerchants(list); }
+  saveMerchantFile(req.merchant.id, 'security', rt.security);
+  res.json({ code: 'OK', merchantName: name });
+});
+
+app.post('/m/:id/api/security/merchant-info', express.json(), async (req, res) => {
+  const rt = req.runtime;
+  const contact = String(req.body.merchantContact || '').trim();
+  const phone = String(req.body.merchantPhone || '').trim();
+  rt.security.merchantContact = contact;
+  rt.security.merchantPhone = phone;
+  saveMerchantFile(req.merchant.id, 'security', rt.security);
+  res.json({ code: 'OK', merchantContact: contact, merchantPhone: phone });
+});
+
+app.post('/m/:id/api/security/password', express.json(), async (req, res) => {
+  const rt = req.runtime;
+  const { oldPassword, newPassword, confirmPassword } = req.body;
+  if (!newPassword || newPassword.length < 4) return res.status(400).json({ code: 'ERROR', message: '新密码长度不能少于4位' });
+  if (newPassword !== confirmPassword) return res.status(400).json({ code: 'ERROR', message: '两次输入的密码不一致' });
+
+  if (rt.security.passwordHash) {
+    if (!oldPassword) return res.status(400).json({ code: 'ERROR', message: '请输入原密码' });
+    const hashFn = req.merchant.type === 'uid' ? hashSecurityPwdUid : hashSecurityPwd;
+    if (hashFn(oldPassword) !== rt.security.passwordHash) return res.status(400).json({ code: 'ERROR', message: '原密码错误' });
+  }
+
+  const hashFn = req.merchant.type === 'uid' ? hashSecurityPwdUid : hashSecurityPwd;
+  rt.security.passwordHash = hashFn(newPassword);
+  saveMerchantFile(req.merchant.id, 'security', rt.security);
+  res.json({ code: 'OK', message: oldPassword ? '密码已修改' : '安全密码已设置' });
+});
+
+app.post('/m/:id/api/security/verify', express.json(), (req, res) => {
+  const rt = req.runtime;
+  const { password } = req.body;
+  if (!rt.security.passwordHash) return res.json({ code: 'OK', verified: true, message: '未设置安全密码' });
+  if (!password) return res.status(400).json({ code: 'ERROR', message: '请输入安全密码' });
+  const hashFn = req.merchant.type === 'uid' ? hashSecurityPwdUid : hashSecurityPwd;
+  if (hashFn(password) === rt.security.passwordHash) return res.json({ code: 'OK', verified: true, message: '验证通过' });
+  return res.status(400).json({ code: 'ERROR', verified: false, message: '密码错误' });
+});
+
+app.post('/m/:id/api/security/skip', express.json(), async (req, res) => {
+  const rt = req.runtime;
+  const { password, enable } = req.body;
+  if (!rt.security.passwordHash) return res.status(400).json({ code: 'ERROR', message: '请先设置二级安全密码' });
+  const hashFn = req.merchant.type === 'uid' ? hashSecurityPwdUid : hashSecurityPwd;
+  if (!password || hashFn(password) !== rt.security.passwordHash) return res.status(400).json({ code: 'ERROR', message: '安全密码错误' });
+  rt.security.skipPassword = !!enable;
+  saveMerchantFile(req.merchant.id, 'security', rt.security);
+  res.json({ code: 'OK', skipPassword: rt.security.skipPassword, message: `免密退款已${rt.security.skipPassword ? '开启' : '关闭'}` });
+});
+
+app.post('/m/:id/api/security/reset-by-paypwd', express.json(), async (req, res) => {
+  const rt = req.runtime;
+  const { payPassword, newPassword, confirmPassword } = req.body;
+  if (!payPassword || payPassword.length < 6) return res.status(400).json({ code: 'ERROR', message: '请输入有效的支付宝支付密码' });
+  if (!newPassword || newPassword.length < 4) return res.status(400).json({ code: 'ERROR', message: '新密码长度不能少于4位' });
+  if (newPassword !== confirmPassword) return res.status(400).json({ code: 'ERROR', message: '两次输入的新密码不一致' });
+  const hashFn = req.merchant.type === 'uid' ? hashSecurityPwdUid : hashSecurityPwd;
+  rt.security.passwordHash = hashFn(newPassword);
+  saveMerchantFile(req.merchant.id, 'security', rt.security);
+  res.json({ code: 'OK', message: '安全密码已重置' });
+});
+
+// ===== 限额 API =====
+
+app.get('/m/:id/api/limits', (req, res) => {
+  res.json({ code: 'OK', success: true, config: req.runtime.limits });
+});
+
+app.post('/m/:id/api/limits', express.json(), async (req, res) => {
+  const rt = req.runtime;
+  const body = req.body;
+  rt.limits = {
+    minAmount: body.minAmount !== '' && body.minAmount !== undefined ? parseFloat(body.minAmount) : null,
+    maxAmount: body.maxAmount !== '' && body.maxAmount !== undefined ? parseFloat(body.maxAmount) : null,
+    dayCount: body.dayCount !== '' && body.dayCount !== undefined ? parseInt(body.dayCount) : null,
+    dayAmount: body.dayAmount !== '' && body.dayAmount !== undefined ? parseFloat(body.dayAmount) : null,
+    monthCount: body.monthCount !== '' && body.monthCount !== undefined ? parseInt(body.monthCount) : null,
+    monthAmount: body.monthAmount !== '' && body.monthAmount !== undefined ? parseFloat(body.monthAmount) : null,
+  };
+  saveMerchantFile(req.merchant.id, 'limits', rt.limits);
+  res.json({ code: 'OK', success: true });
+});
+
+// ===== UID 跳转页 =====
+
+app.get('/m/:id/pay/', (req, res) => {
+  const m = req.merchant;
+  if (m.type !== 'uid') return res.status(404).send('Not found');
+
+  const amount = parseFloat(req.query.amount) || 0;
+  const memo = req.query.memo || '';
+  const uid = req.query.uid || m.alipayUid;
+  if (!amount || !uid) return res.status(400).send('参数不完整');
+
+  const bizData = JSON.stringify({ s: 'money', u: uid, a: amount.toFixed(2), m: memo });
+  const encodedBiz = encodeURIComponent(bizData);
+  const alipayUrl1 = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodedBiz}`;
+  const alipayUrl2 = `alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=${encodedBiz}`;
+
+  res.send(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>黑金PAY · 正在打开支付宝</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #070707; color: #d4af37; display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; text-align: center; flex-direction: column; padding: 24px;
+  }
+  .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(212,175,55,0.15); border-radius: 20px; padding: 36px 28px; width: 100%; max-width: 340px; }
+  .logo { font-size: 26px; font-weight: 800; letter-spacing: 6px; margin-bottom: 4px; background: linear-gradient(135deg, #f0d77a, #d4af37, #b8860b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .brand { font-size: 11px; color: rgba(212,175,55,0.4); margin-bottom: 28px; letter-spacing: 3px; }
+  .amount-label { font-size: 12px; color: rgba(255,255,255,0.25); margin-bottom: 6px; }
+  .amount { font-size: 44px; font-weight: 900; margin-bottom: 4px; background: linear-gradient(135deg, #f0d77a, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .memo { font-size: 13px; color: rgba(212,175,55,0.5); margin-bottom: 28px; word-break: break-all; }
+  .spinner { width: 40px; height: 40px; border: 3px solid rgba(212,175,55,0.2); border-top-color: #d4af37; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 18px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status-text { font-size: 15px; font-weight: 700; color: #d4af37; margin-bottom: 8px; }
+  .status-sub { font-size: 12px; color: rgba(255,255,255,0.3); line-height: 1.6; }
+  .pay-btn { display:none; width:100%; background: linear-gradient(135deg, #d4af37, #b8860b); color: #070707; border:none; border-radius:14px; padding:16px 0; font-size:17px; font-weight:800; text-decoration:none; letter-spacing:3px; cursor:pointer; margin-top:20px; box-shadow:0 4px 20px rgba(212,175,55,0.25); }
+  .pay-btn.show { display:block; }
+  .success-view { display:none; }
+  .success-view.show { display:block; }
+  .jump-view.hide { display:none; }
+  .success-icon { width:60px; height:60px; border-radius:50%; background:linear-gradient(135deg, #52c41a, #389e0d); color:#fff; font-size:32px; font-weight:800; line-height:60px; margin:0 auto 18px; box-shadow:0 4px 20px rgba(82,196,26,0.3); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="jump-view" id="jumpView">
+    <div class="logo">黑金PAY</div>
+    <div class="brand">HEIJIN PAY</div>
+    <div class="amount-label">支付金额</div>
+    <div class="amount">¥${amount.toFixed(2)}</div>
+    ${memo ? `<div class="memo">${memo}</div>` : ''}
+    <div class="spinner" id="spinner"></div>
+    <div class="status-text" id="statusText">正在打开支付宝...</div>
+    <div class="status-sub" id="statusSub">请稍候，系统正在为您跳转</div>
+    <a class="pay-btn" id="payBtn" href="${alipayUrl2}">重新打开支付宝</a>
+  </div>
+  <div class="success-view" id="successView">
+    <div class="success-icon">✓</div>
+    <div class="status-text">支付完成</div>
+    <div class="amount" style="margin-top:12px;margin-bottom:20px;">¥${amount.toFixed(2)}</div>
+    <div class="status-sub">如已完成付款，请通知商户确认到账</div>
+  </div>
+</div>
+<script>
+(function(){
+  var urls=[${JSON.stringify(alipayUrl1)},${JSON.stringify(alipayUrl2)}];
+  var hasHidden=false;
+  function showSuccess(){document.getElementById('jumpView').classList.add('hide');document.getElementById('successView').classList.add('show');document.title='黑金PAY · 支付完成';}
+  function tryOpen(){window.location.href=urls[0];}
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')hasHidden=true;else if(hasHidden)showSuccess();});
+  tryOpen();
+  setTimeout(function(){if(document.visibilityState==='visible')tryOpen();},300);
+  setTimeout(function(){if(document.visibilityState==='visible'){document.getElementById('spinner').style.display='none';document.getElementById('statusText').textContent='未能自动跳转';document.getElementById('statusSub').textContent='请点击下方按钮手动打开支付宝';document.getElementById('payBtn').classList.add('show');}},2500);
+})();
+</script>
+</body>
+</html>`);
+});
+
+// ===== UID 专属 API =====
+
+app.get('/m/:id/api/network-info', (req, res) => {
+  const interfaces = os.networkInterfaces();
+  const ips = [];
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) ips.push(iface.address);
+    }
+  }
+  res.json({ code: 'OK', data: { ips, port: PORT } });
+});
+
+app.get('/m/:id/api/config', (req, res) => {
+  const m = req.merchant;
+  const uidMasked = m.alipayUid ? m.alipayUid.slice(0, 4) + '****' + m.alipayUid.slice(-4) : '未配置';
+  res.json({ code: 'OK', data: { alipayUid: uidMasked, hasUid: !!m.alipayUid, hasPaymentApi: false, merchantName: m.merchantName || '未配置' } });
+});
+
+// ======================== 启动服务 ========================
+
+// 预加载所有已有商户的运行时
+const existingMerchants = loadMerchants();
+for (const m of existingMerchants) {
+  getMerchantRuntime(m.id, m);
+}
+
+// 管理端静态文件
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.listen(PORT, () => {
-  console.log(`黑金PAY商户管理系统已启动: http://localhost:${PORT}`);
-  console.log(`默认管理员账号：${ADMIN_USERNAME}，密码：${ADMIN_PASSWORD}`);
+  console.log('');
+  console.log('========================================');
+  console.log('  黑金PAY 商户管理系统（统一端口）');
+  console.log(`  管理端: http://localhost:${PORT}`);
+  console.log(`  默认管理员: ${ADMIN_USERNAME} / ${ADMIN_PASSWORD}`);
+  console.log('========================================');
+  console.log('');
+  console.log('  商户入口（例）:');
+  for (const m of existingMerchants) {
+    console.log(`  http://localhost:${PORT}/m/${m.id}/login.html  ← ${m.merchantName}`);
+    console.log(`  http://localhost:${PORT}/m/${m.id}/cashier.html`);
+  }
+  if (existingMerchants.length === 0) {
+    console.log('  (暂无商户，请先在管理端添加)');
+  }
+  console.log('');
 });

@@ -1157,7 +1157,7 @@ async function createQRCode() {
   lastSubject = subject;
 
   try {
-    const res = await fetch(`${API_BASE}/cashier/qrcode`, {
+    const res = await fetch(`${API_BASE}cashier/qrcode`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1257,7 +1257,7 @@ function startPolling() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/cashier/check?out_trade_no=${currentOutTradeNo}`);
+      const res = await fetch(`${API_BASE}cashier/check?out_trade_no=${currentOutTradeNo}`);
       const data = await res.json();
       if (data.status === 'paid') {
         clearInterval(pollingTimer);
@@ -1408,7 +1408,7 @@ window.addEventListener('scroll', (e) => {
 // ==================== 拉取限额配置 ====================
 async function fetchLimitConfig() {
   try {
-    const res = await fetch('/api/limits');
+    const res = await fetch('api/limits');
     const data = await res.json();
     if (data.success) {
       limitConfig = data.data || data.config || {};
@@ -1428,7 +1428,7 @@ async function showLocalhostIps() {
   const list = document.getElementById('localhostIpList');
   tip.classList.add('show');
   try {
-    const res = await fetch('/api/network-info');
+    const res = await fetch('api/network-info');
     const json = await res.json();
     const ips = (json.data && json.data.ips) || [];
     const port = (json.data && json.data.port) || window.location.port || 3002;

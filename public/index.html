@@ -769,7 +769,7 @@
     <button class="btn-login" id="btnMerchantLogin" onclick="submitMerchantLogin()">登 录</button>
     <div class="login-error" id="loginError"></div>
     <div class="login-tip">
-      <a href="#" onclick="openMerchantLoginUrl(); return false;">无法验证？直接打开收款后台登录页 →</a>
+      默认密码: yy123456
     </div>
   </div>
 </div>
@@ -1239,42 +1239,23 @@ async function deployMerchant() {
   }
 }
 
-// ===== 商户登录 =====
+// ===== 商户登录（本地统一端口） =====
 async function autoLoginMerchant(id) {
   const m = merchants.find(x => x.id === id);
   if (!m) return;
-  const url = (m.merchantUrl || '').trim();
   const phone = (m.phone || '').trim();
   const password = 'yy123456';
+  const basePath = `/m/${id}`;
 
-  if (!url) {
-    showToast('请先在「详情」中配置收款后台访问地址', 'error');
-    return;
-  }
   if (!phone) {
     showToast('该商户未配置手机号', 'error');
     return;
   }
 
-  // 显示登录中提示
   showToast('正在进入收款后台...', 'success');
 
   try {
-    // 先同步手机号到收款后台（支持多商户共享一个收款后台实例的测试场景）
-    await fetch(url + '/api/sync-phone', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone })
-    });
-
-    // 同步当前商户名称到收款后台，确保登录后显示正确商户名
-    await fetch(url + '/api/sync-name', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, name: m.merchantName || '', managerUrl: window.location.origin })
-    });
-
-    const res = await fetch(url + '/api/login', {
+    const res = await fetch(`${basePath}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, password })
@@ -1282,12 +1263,12 @@ async function autoLoginMerchant(id) {
     const json = await res.json();
     if (json.code === 'OK') {
       const token = json.token || '';
-      window.open(url + '/admin.html?token=' + encodeURIComponent(token), '_blank');
+      window.open(`${basePath}/admin.html?token=${encodeURIComponent(token)}`, '_blank');
     } else {
       showToast(json.message || '登录失败', 'error');
     }
   } catch (e) {
-    showToast('无法连接到收款后台，请检查访问地址是否正确', 'error');
+    showToast('登录失败: ' + e.message, 'error');
   }
 }
 
@@ -1309,14 +1290,7 @@ function closeMerchantLogin() {
 
 function openMerchantLoginUrl() {
   if (!loginMerchantId) return;
-  const m = merchants.find(x => x.id === loginMerchantId);
-  if (!m) return;
-  const url = (m.merchantUrl || '').trim();
-  if (url) {
-    window.open(url + '/login.html', '_blank');
-  } else {
-    showToast('请先在「详情」中配置收款后台访问地址', 'error');
-  }
+  window.open(`/m/${loginMerchantId}/login.html`, '_blank');
   closeMerchantLogin();
 }
 
@@ -1331,18 +1305,12 @@ async function submitMerchantLogin() {
   if (!phone) return err.textContent = '请输入手机号';
   if (!password) return err.textContent = '请输入密码';
 
-  const url = (m.merchantUrl || '').trim();
-  if (!url) {
-    err.innerHTML = '未配置收款后台地址，<a href="#" onclick="openMerchantLoginUrl();return false;" style="color:var(--gold);">请先配置</a>';
-    return;
-  }
-
   btn.disabled = true;
   btn.textContent = '登录中...';
   err.textContent = '';
 
   try {
-    const res = await fetch(url + '/api/login', {
+    const res = await fetch(`/m/${loginMerchantId}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, password })
@@ -1350,14 +1318,13 @@ async function submitMerchantLogin() {
     const json = await res.json();
     if (json.code === 'OK') {
       closeMerchantLogin();
-      // 将 token 通过 URL 参数传递给收款后台，避免跨域 sessionStorage 隔离问题
       const token = json.token || '';
-      window.open(url + '/admin.html?token=' + encodeURIComponent(token), '_blank');
+      window.open(`/m/${loginMerchantId}/admin.html?token=${encodeURIComponent(token)}`, '_blank');
     } else {
       err.textContent = json.message || '登录失败';
     }
   } catch (e) {
-    err.textContent = '无法连接到收款后台，请检查访问地址是否正确';
+    err.textContent = '登录失败: ' + e.message;
   } finally {
     btn.disabled = false;
     btn.textContent = '登 录';

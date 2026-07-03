@@ -253,7 +253,7 @@ const TOKEN_KEY = 'heijin_merchant_token';
   const token = sessionStorage.getItem(TOKEN_KEY);
   if (token) {
     // 验证 token 有效性
-    fetch('/api/login/check', {
+    fetch('api/login/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': token }
     }).then(r => r.json()).then(json => {
@@ -310,7 +310,7 @@ async function submitLogin() {
   btn.textContent = '登录中...';
 
   try {
-    const res = await fetch('/api/login', {
+    const res = await fetch('api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, password })
