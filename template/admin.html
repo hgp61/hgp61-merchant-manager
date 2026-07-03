@@ -3831,6 +3831,10 @@ function downloadMerchantQRImage() {
   var qrImg = new Image();
 
   function onAllLoaded() {
+    // 开启高质量图像平滑
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
     // ====== 背景 ======
     var bgGrad = ctx.createLinearGradient(0, 0, w, h);
     bgGrad.addColorStop(0, '#121008');
@@ -3844,7 +3848,7 @@ function downloadMerchantQRImage() {
     roundRect(ctx, 2, 2, w-4, h-4, 30, false, true);
 
     // ====== Logo 圆形区域（绘制真实 logo） ======
-    var ls = 72, lx = w/2 - ls/2, ly = 60;
+    var ls = 120, lx = w/2 - ls/2, ly = 50;
     ctx.save();
     ctx.beginPath();
     ctx.arc(w/2, ly+ls/2, ls/2, 0, Math.PI*2);
@@ -3852,7 +3856,7 @@ function downloadMerchantQRImage() {
     ctx.clip();
     ctx.fillStyle = '#121008';
     ctx.fill();
-    try { ctx.drawImage(logoImg, lx+6, ly+6, ls-12, ls-12); } catch(e) {}
+    try { ctx.drawImage(logoImg, lx+8, ly+8, ls-16, ls-16); } catch(e) {}
     ctx.restore();
     // 金色圆环边框
     ctx.beginPath();
@@ -3866,15 +3870,16 @@ function downloadMerchantQRImage() {
     ctx.fillStyle = '#f0d77a';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('黑金PAY', w/2, 210);
+    ctx.fillText('黑金PAY', w/2, 220);
 
     // slogan
     ctx.font = '24px sans-serif';
     ctx.fillStyle = 'rgba(212,175,55,0.5)';
-    ctx.fillText('安全收款 · 即时到账', w/2, 252);
+    ctx.fillText('安全收款 · 即时到账', w/2, 262);
 
     // badge
-    var bW=260,bH=52,bX=(w-bW)/2,bY=288;
+    // badge
+    var bW=260,bH=52,bX=(w-bW)/2,bY=298;
     ctx.fillStyle='rgba(30,26,16,0.9)';
     roundRect(ctx,bX,bY,bW,bH,26,true,false);
     ctx.strokeStyle='rgba(212,175,55,0.3)';
@@ -3887,10 +3892,10 @@ function downloadMerchantQRImage() {
     // 标题
     ctx.font='bold 30px sans-serif';
     ctx.fillStyle='#d4af37';
-    ctx.fillText('收款二维码', w/2, 396);
+    ctx.fillText('收款二维码', w/2, 406);
 
     // 二维码白底框（适中大小）
-    var qbx=(w-440)/2,qby=440,qbs=440;
+    var qbx=(w-440)/2,qby=450,qbs=440;
     ctx.fillStyle='#ffffff';
     roundRect(ctx,qbx,qby,qbs,qbs,28,true,false);
 
@@ -3898,7 +3903,7 @@ function downloadMerchantQRImage() {
     try { ctx.drawImage(qrImg, qbx+44, qby+44, 352, 352); } catch(e) {}
 
     // 二维码中心 Logo（不影响扫码，H级纠错可容忍30%遮挡）
-    var logoSize = 80;
+    var logoSize = 140;
     var logoCX = qbx + 44 + 352/2;
     var logoCY = qby + 44 + 352/2;
     // 白底圆
@@ -3924,7 +3929,7 @@ function downloadMerchantQRImage() {
     // 底部提示（只保留一行）
     ctx.font='26px sans-serif';
     ctx.fillStyle='rgba(212,175,55,0.45)';
-    ctx.fillText('使用支付宝扫一扫完成支付', w/2, qby+qbs+52);
+    ctx.fillText('使用支付宝扫一扫完成支付', w/2, qby+qbs+60);
 
     // 导出下载
     var link = document.createElement('a');
