@@ -831,6 +831,21 @@ app.post('/m/:id/api/login', express.json(), (req, res) => {
   return res.status(400).json({ code: 'FAIL', message: '手机号或密码错误' });
 });
 
+// 管理员免密直接登录 — 商户管理系统调用，无需密码
+app.post('/m/:id/api/login/admin', (req, res) => {
+  const rt = req.runtime;
+  const m = req.merchant;
+  const phone = (m.phone || '').trim();
+  const token = crypto.randomBytes(24).toString('hex');
+  rt.sessions.set(token, {
+    createdAt: Date.now(),
+    phone,
+    isAdmin: true,
+  });
+  console.log(`[${m.id}] 管理员免密登录 (phone=${phone})`);
+  return res.json({ code: 'OK', token, message: '管理员直接登录' });
+});
+
 app.post('/m/:id/api/login/check', (req, res) => {
   const token = cleanToken(req.headers.authorization);
   const session = req.runtime.sessions.get(token);

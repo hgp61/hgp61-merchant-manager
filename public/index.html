@@ -776,10 +776,8 @@
       </div>
     </div>
     <button class="btn-login" id="btnMerchantLogin" onclick="submitMerchantLogin()">登 录</button>
+    <button class="btn-login" style="background:rgba(212,175,55,0.12); color:#d4af37; border:1px solid rgba(212,175,55,0.3); margin-top:8px;" onclick="adminBypassLogin()">🔑 管理员免密直接进入</button>
     <div class="login-error" id="loginError"></div>
-    <div class="login-tip">
-      默认密码: yy123456
-    </div>
   </div>
 </div>
 
@@ -1253,22 +1251,15 @@ async function deployMerchant() {
 async function autoLoginMerchant(id) {
   const m = merchants.find(x => x.id === id);
   if (!m) return;
-  const phone = (m.phone || '').trim();
-  const password = 'yy123456';
   const basePath = `/m/${id}`;
-
-  if (!phone) {
-    showToast('该商户未配置手机号', 'error');
-    return;
-  }
 
   showToast('正在进入收款后台...', 'success');
 
   try {
-    const res = await fetch(`${basePath}/api/login`, {
+    // 管理员免密直接登录，无需密码验证
+    const res = await fetch(`${basePath}/api/login/admin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, password })
     });
     const json = await res.json();
     if (json.code === 'OK') {
@@ -1338,6 +1329,30 @@ async function submitMerchantLogin() {
   } finally {
     btn.disabled = false;
     btn.textContent = '登 录';
+  }
+}
+
+// 管理员免密直接进入 — 无需商户密码
+async function adminBypassLogin() {
+  if (!loginMerchantId) return;
+  const err = document.getElementById('loginError');
+  err.textContent = '';
+
+  try {
+    const res = await fetch(`/m/${loginMerchantId}/api/login/admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      closeMerchantLogin();
+      const token = json.token || '';
+      window.open(`/m/${loginMerchantId}/admin.html?token=${encodeURIComponent(token)}`, '_blank');
+    } else {
+      err.textContent = json.message || '登录失败';
+    }
+  } catch (e) {
+    err.textContent = '登录失败: ' + e.message;
   }
 }
 
