@@ -114,9 +114,13 @@ function getMerchantRuntime(id, merchant) {
         gateway: 'https://openapi.alipay.com/gateway.do',
         keyType,
       });
+      console.log(`[商户:${id}] AlipaySdk 初始化成功 (keyType=${keyType})`);
     } catch (e) {
       console.error(`[商户:${id}] AlipaySdk 初始化失败:`, e.message);
+      runtime.alipaySdkError = e.message;
     }
+  } else {
+    console.log(`[商户:${id}] 跳过 AlipaySdk 初始化: type=${merchant.type}, hasAppId=${!!merchant.appId}, hasPrivateKey=${!!merchant.privateKey}`);
   }
 
   merchantRuntimes.set(id, runtime);
@@ -763,7 +767,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
 
     // 如果前端传了 base_url，使用 HTTPS 跳转方式
     const frontendBaseUrl = req.body.base_url || '';
-    const effectiveBaseUrl = frontendBaseUrl;
+    const effectiveBaseUrl = frontendBaseUrl ? (frontendBaseUrl.replace(/\/$/, '') + '/') : '';
     if (effectiveBaseUrl) {
       qrContent = `${effectiveBaseUrl}m/${m.id}/pay/?amount=${amtNum.toFixed(2)}&uid=${m.alipayUid}&memo=${encodeURIComponent(subject)}`;
     }
@@ -787,7 +791,14 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
 
   // ===== 当面付 =====
   if (!rt.alipaySdk) {
-    return res.status(500).json({ code: 'ERROR', message: '支付宝SDK未初始化，请检查商户配置' });
+    return res.status(500).json({
+      code: 'ERROR',
+      message: '支付宝SDK未初始化，请检查商户配置',
+      detail: rt.alipaySdkError || '商户缺少 appId 或 privateKey，或 keyType 不匹配',
+      merchantType: m.type,
+      hasAppId: !!m.appId,
+      hasPrivateKey: !!m.privateKey,
+    });
   }
 
   try {
@@ -847,7 +858,7 @@ app.get('/m/:id/cashier/check', async (req, res) => {
   }
 
   // 当面付：查支付宝
-  if (!rt.alipaySdk) return res.json({ code: 'ERROR', message: 'SDK未初始化' });
+  if (!rt.alipaySdk) return res.json({ code: 'ERROR', message: 'SDK未初始化', detail: rt.alipaySdkError || '缺少 appId/privateKey' });
   try {
     const result = await rt.alipaySdk.exec('alipay.trade.query', { bizContent: { out_trade_no: outTradeNo } });
     const resp = result.alipay_trade_query_response || result;
@@ -1173,6 +1184,13 @@ app.post('/m/:id/api/limits', express.json(), async (req, res) => {
 });
 
 // ===== UID 跳转页 =====
+
+// 兼容不带尾部斜杠的访问
+app.get('/m/:id/pay', (req, res) => {
+  const queryString = new URLSearchParams(req.query).toString();
+  const redirectUrl = queryString ? `/m/${req.params.id}/pay/?${queryString}` : `/m/${req.params.id}/pay/`;
+  res.redirect(redirectUrl);
+});
 
 app.get('/m/:id/pay/', (req, res) => {
   const m = req.merchant;
