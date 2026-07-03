@@ -1205,6 +1205,9 @@ app.get('/m/:id/pay/', (req, res) => {
   const encodedBiz = encodeURIComponent(bizData);
   const alipayUrl1 = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodedBiz}`;
   const alipayUrl2 = `alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=${encodedBiz}`;
+  // 支付宝内浏览器使用 ds.alipay.com 中转（alipays:// 在支付宝内无法拉起自身）
+  const dsUrl1 = `https://ds.alipay.com/?scheme=${encodeURIComponent(alipayUrl1)}`;
+  const dsUrl2 = `https://ds.alipay.com/?scheme=${encodeURIComponent(alipayUrl2)}`;
 
   res.send(`<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1248,7 +1251,7 @@ app.get('/m/:id/pay/', (req, res) => {
     <div class="spinner" id="spinner"></div>
     <div class="status-text" id="statusText">正在打开支付宝...</div>
     <div class="status-sub" id="statusSub">请稍候，系统正在为您跳转</div>
-    <a class="pay-btn" id="payBtn" href="${alipayUrl2}">重新打开支付宝</a>
+    <a class="pay-btn" id="payBtn" href="javascript:void(0)">打开支付宝</a>
   </div>
   <div class="success-view" id="successView">
     <div class="success-icon">✓</div>
@@ -1259,14 +1262,15 @@ app.get('/m/:id/pay/', (req, res) => {
 </div>
 <script>
 (function(){
-  var urls=[${JSON.stringify(alipayUrl1)},${JSON.stringify(alipayUrl2)}];
+  var isInAlipay = /AlipayClient|AliApp/i.test(navigator.userAgent);
+  var urls = isInAlipay ? [${JSON.stringify(dsUrl1)}, ${JSON.stringify(dsUrl2)}] : [${JSON.stringify(alipayUrl1)}, ${JSON.stringify(alipayUrl2)}];
   var hasHidden=false;
   function showSuccess(){document.getElementById('jumpView').classList.add('hide');document.getElementById('successView').classList.add('show');document.title='黑金PAY · 支付完成';}
   function tryOpen(){window.location.href=urls[0];}
   document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')hasHidden=true;else if(hasHidden)showSuccess();});
   tryOpen();
   setTimeout(function(){if(document.visibilityState==='visible')tryOpen();},300);
-  setTimeout(function(){if(document.visibilityState==='visible'){document.getElementById('spinner').style.display='none';document.getElementById('statusText').textContent='未能自动跳转';document.getElementById('statusSub').textContent='请点击下方按钮手动打开支付宝';document.getElementById('payBtn').classList.add('show');}},2500);
+  setTimeout(function(){if(document.visibilityState==='visible'){document.getElementById('spinner').style.display='none';document.getElementById('statusText').textContent='未能自动跳转';document.getElementById('statusSub').textContent='请点击下方按钮手动打开支付宝';var btn=document.getElementById('payBtn');btn.href=urls[0];btn.textContent='打开支付宝';btn.classList.add('show');}},2500);
 })();
 </script>
 </body>
