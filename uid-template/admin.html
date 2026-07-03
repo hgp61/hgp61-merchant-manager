@@ -3829,14 +3829,18 @@ function downloadMerchantQRImage() {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    // ====== 背景（黑金流光） ======
-    var bgGrad = ctx.createRadialGradient(w/2, h*0.3, 0, w/2, h*0.5, w*0.8);
-    bgGrad.addColorStop(0, '#b89830');     // 中心亮金色光晕
-    bgGrad.addColorStop(0.15, '#6a5020');  // 暗金过渡
-    bgGrad.addColorStop(0.3, '#2a2010');   // 深褐
-    bgGrad.addColorStop(0.5, '#100c04');   // 暗黑
-    bgGrad.addColorStop(0.7, '#1a1508');   // 暗褐
-    bgGrad.addColorStop(1, '#0a0703');     // 边缘深黑
+    // ====== 背景（黑金流光 - 顶部底部光带） ======
+    var bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+    bgGrad.addColorStop(0, '#8a7020');      // 顶部暗金
+    bgGrad.addColorStop(0.05, '#d4af37');   // 顶部金色光带
+    bgGrad.addColorStop(0.12, '#6a5020');   // 暗金过渡
+    bgGrad.addColorStop(0.25, '#1e1508');   // 深褐
+    bgGrad.addColorStop(0.4, '#0a0703');    // 中间暗黑
+    bgGrad.addColorStop(0.6, '#0a0703');   // 中间暗黑
+    bgGrad.addColorStop(0.75, '#1e1508');  // 深褐
+    bgGrad.addColorStop(0.88, '#6a5020');  // 暗金过渡
+    bgGrad.addColorStop(0.95, '#d4af37');   // 底部金色光带
+    bgGrad.addColorStop(1, '#8a7020');     // 底部暗金
     ctx.fillStyle = bgGrad;
     roundRect(ctx, 0, 0, w, h, 64, true, false);
 
@@ -3865,15 +3869,23 @@ function downloadMerchantQRImage() {
 
     // ====== 品牌名 ======
     ctx.font = 'bold 96px sans-serif';
-    ctx.fillStyle = '#f0d77a';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('黑金PAY', w/2, 470);
+    ctx.shadowColor = 'transparent';
 
     // slogan
     ctx.font = '48px sans-serif';
-    ctx.fillStyle = 'rgba(212,175,55,0.5)';
+    ctx.fillStyle = 'rgba(255,248,224,0.85)';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 12;
     ctx.fillText('安全收款 · 即时到账', w/2, 564);
+    ctx.shadowColor = 'transparent';
 
     // badge
     var bW=520,bH=104,bX=(w-bW)/2,bY=596;
@@ -3883,13 +3895,19 @@ function downloadMerchantQRImage() {
     ctx.lineWidth=4;
     roundRect(ctx,bX,bY,bW,bH,52,false,true);
     ctx.font='44px sans-serif';
-    ctx.fillStyle='rgba(212,175,55,0.7)';
+    ctx.fillStyle='rgba(212,175,55,0.9)';
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 10;
     ctx.fillText('🔒 支付宝实时交易', w/2, bY+bH/2+4);
+    ctx.shadowColor = 'transparent';
 
     // 标题
     ctx.font='bold 60px sans-serif';
-    ctx.fillStyle='#d4af37';
+    ctx.fillStyle='#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 14;
     ctx.fillText('收款二维码', w/2, 812);
+    ctx.shadowColor = 'transparent';
 
     // 二维码白底框
     var qbx=(w-880)/2,qby=900,qbs=880;
@@ -3925,8 +3943,11 @@ function downloadMerchantQRImage() {
 
     // 底部提示（只保留一行）
     ctx.font='52px sans-serif';
-    ctx.fillStyle='rgba(212,175,55,0.45)';
+    ctx.fillStyle='rgba(255,248,224,0.85)';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 12;
     ctx.fillText('使用支付宝扫一扫完成支付', w/2, qby+qbs+120);
+    ctx.shadowColor = 'transparent';
 
     // 导出下载
     var link = document.createElement('a');
