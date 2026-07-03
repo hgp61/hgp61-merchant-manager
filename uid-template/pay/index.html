@@ -3,109 +3,43 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>黑金PAY · 确认支付</title>
+<title>黑金PAY</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#070707;color:#d4af37;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;flex-direction:column;padding:24px;-webkit-tap-highlight-color:transparent}
-.card{background:rgba(255,255,255,0.03);border:1px solid rgba(212,175,55,0.15);border-radius:20px;padding:36px 28px 28px;width:100%;max-width:340px}
-.logo{font-size:26px;font-weight:800;letter-spacing:6px;margin-bottom:4px;background:linear-gradient(135deg,#f0d77a,#d4af37,#b8860b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.brand{font-size:11px;color:rgba(212,175,55,0.4);margin-bottom:24px;letter-spacing:3px}
-.al{font-size:12px;color:rgba(255,255,255,0.25);margin-bottom:6px;letter-spacing:1px}
-.amt{font-size:48px;font-weight:900;margin-bottom:6px;background:linear-gradient(135deg,#f0d77a,#d4af37);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.memo{font-size:13px;color:rgba(212,175,55,0.5);margin-bottom:24px;word-break:break-all}
-.hr{height:1px;background:rgba(212,175,55,0.1);margin:20px 0 24px}
-.btn{display:block;width:100%;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;border-radius:14px;padding:16px 0;font-size:18px;font-weight:800;text-decoration:none;letter-spacing:3px;cursor:pointer;margin-bottom:12px;box-shadow:0 4px 20px rgba(212,175,55,0.25);-webkit-tap-highlight-color:transparent}
-.btn:active{opacity:0.85;transform:scale(0.98)}
-.steps{margin-top:20px;text-align:left;font-size:13px;color:rgba(255,255,255,0.5);line-height:2.2}
-.steps-num{display:inline-block;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;font-size:12px;font-weight:800;text-align:center;line-height:22px;margin-right:8px;vertical-align:middle}
-.hide{display:none!important}
-.done{display:none;text-align:center}
-.done.show{display:block}
-.si{width:60px;height:60px;border-radius:50%;margin:24px auto 18px;background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;font-size:32px;font-weight:800;line-height:60px;box-shadow:0 4px 20px rgba(82,196,26,0.3)}
-.dn{font-size:12px;color:rgba(255,255,255,0.3);margin-top:24px;line-height:1.8}
+.icon{width:80px;height:80px;margin-bottom:28px}
+.logo{font-size:24px;font-weight:800;letter-spacing:8px;margin-bottom:6px;background:linear-gradient(135deg,#f0d77a,#d4af37,#b8860b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.brand{font-size:10px;color:rgba(212,175,55,0.35);margin-bottom:40px;letter-spacing:4px}
+.title{font-size:20px;font-weight:800;color:#d4af37;margin-bottom:14px;letter-spacing:1px}
+.sub{font-size:14px;color:rgba(255,255,255,0.35);line-height:2;margin-bottom:36px}
+.steps{text-align:left;display:inline-block}
+.step{font-size:14px;color:rgba(255,255,255,0.55);line-height:2.6;padding-left:30px;position:relative}
+.step-num{position:absolute;left:0;top:7px;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;font-size:11px;font-weight:800;text-align:center;line-height:20px}
+.footer{margin-top:48px;font-size:10px;color:rgba(255,255,255,0.12);letter-spacing:2px}
 </style>
 </head>
 <body>
-<div class="card">
-  <div id="payView">
-    <div class="logo">黑金PAY</div>
-    <div class="brand">HEIJIN PAY</div>
-    <div class="al">向商户收款</div>
-    <div class="amt" id="amount">¥0.00</div>
-    <div class="memo" id="memo" style="display:none"></div>
-    <div class="hr"></div>
-    <a class="btn" id="btnOpen" href="#">打开支付宝</a>
-    <div class="steps">
-      <div><span class="steps-num">1</span> 点击上方按钮打开支付宝</div>
-      <div><span class="steps-num">2</span> 支付宝打开后，回到浏览器</div>
-      <div><span class="steps-num">3</span> 点击「复制收款信息」</div>
-      <div><span class="steps-num">4</span> 打开支付宝 → 转账 → 粘贴信息</div>
-    </div>
-    <a class="btn" id="btnCopy" style="background:transparent;color:#d4af37;border:1px solid rgba(212,175,55,0.3);margin-top:16px;letter-spacing:2px;font-size:15px">复制收款信息</a>
+  <div class="icon">
+    <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="40" cy="40" r="36" stroke="url(#g)" stroke-width="2"/>
+      <path d="M36 28 L36 52 M28 36 L36 28 L44 36" stroke="url(#g)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <defs>
+        <linearGradient id="g" x1="4" y1="4" x2="76" y2="76">
+          <stop offset="0%" stop-color="#f0d77a"/>
+          <stop offset="100%" stop-color="#b8860b"/>
+        </linearGradient>
+      </defs>
+    </svg>
   </div>
-  <div id="doneView" class="done">
-    <div class="logo">黑金PAY</div>
-    <div class="brand">HEIJIN PAY</div>
-    <div class="si">✓</div>
-    <div style="font-size:15px;font-weight:700;color:#d4af37;letter-spacing:1px;margin-bottom:8px">支付完成</div>
-    <div class="amt" id="amount2">¥0.00</div>
-    <div class="dn">如已完成付款，请通知商户确认到账<br>● 点击左上角返回商家页面<br>● 或关闭当前页面</div>
+  <div class="logo">黑金PAY</div>
+  <div class="brand">HEIJIN PAY</div>
+  <div class="title">请使用支付宝扫码</div>
+  <div class="sub">此收款码仅支持支付宝扫描</div>
+  <div class="steps">
+    <div class="step"><span class="step-num">1</span> 打开支付宝 App</div>
+    <div class="step"><span class="step-num">2</span> 点击首页「扫一扫」</div>
+    <div class="step"><span class="step-num">3</span> 扫描此二维码即可付款</div>
   </div>
-</div>
-<script>
-(function(){
-  var params = new URLSearchParams(location.search);
-  var amount = params.get('amount') || '0';
-  var memo = params.get('memo') || '';
-  var uid = params.get('uid') || '';
-
-  document.getElementById('amount').textContent = '¥' + parseFloat(amount).toFixed(2);
-  document.getElementById('amount2').textContent = '¥' + parseFloat(amount).toFixed(2);
-
-  if(memo){
-    document.getElementById('memo').textContent = memo;
-    document.getElementById('memo').style.display = 'block';
-  }
-
-  // 构造收款信息文本
-  var infoText = '支付宝UID：' + uid + '\n金额：¥' + parseFloat(amount).toFixed(2) + (memo ? '\n备注：' + memo : '');
-
-  // 按钮1：唤起支付宝（点击后页面会隐藏，用户再切回来）
-  document.getElementById('btnOpen').addEventListener('click', function(e) {
-    e.preventDefault();
-    // 尝试唤起支付宝
-    var biz = JSON.stringify({ s:'money', u:uid, a:parseFloat(amount).toFixed(2), m:memo });
-    var ebiz = encodeURIComponent(biz);
-    var alipaysUrl = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz;
-    location.href = alipaysUrl;
-  });
-
-  // 按钮2：复制收款信息
-  document.getElementById('btnCopy').addEventListener('click', function() {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(infoText).then(function() { alert('收款信息已复制\n\n' + infoText); });
-    } else {
-      var ta = document.createElement('textarea');
-      ta.value = infoText;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      alert('收款信息已复制\n\n' + infoText);
-    }
-  });
-
-  // 监听从支付宝返回
-  var hasHidden = false;
-  document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState === 'hidden'){ hasHidden = true; }
-    else if(hasHidden){
-      document.title = '黑金PAY · 支付完成';
-      document.getElementById('payView').classList.add('hide');
-      document.getElementById('doneView').classList.add('show');
-    }
-  });
-})();
-</script>
+  <div class="footer">BLACK GOLD PAY</div>
 </body>
 </html>
