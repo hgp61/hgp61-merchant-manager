@@ -3775,20 +3775,9 @@ function renderMerchantQRCode() {
 
   var cashierUrl = window.location.origin + window.location.pathname.replace(/admin\.html$/, 'cashier.html');
 
-  // 根据商户类型决定二维码内容：
-  // - face 商户：使用收银台 URL（https，需要走收银台页面）
-  // - uid/uid-simple 商户：使用 alipays:// 跳转链接，支付宝直接内部跳转，不弹"即将离开"提示
-  var qrText = cashierUrl;
-  var mType = (securityData && securityData.type) || 'face';
-  var mUid = (securityData && securityData.alipayUid) || '';
-  if ((mType === 'uid' || mType === 'uid-simple') && mUid) {
-    var bizData = JSON.stringify({ s: 'money', u: mUid, a: '', m: '黑金PAY收款' });
-    qrText = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + encodeURIComponent(bizData);
-  }
-
   // qrcodejs API：直接在容器内创建
   _merchantQrInstance = new QRCode(box, {
-    text: qrText,
+    text: cashierUrl,
     width: 400,
     height: 400,
     colorDark: '#b8860b',
