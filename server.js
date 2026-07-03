@@ -1201,12 +1201,10 @@ app.get('/m/:id/pay/', (req, res) => {
   const uid = req.query.uid || m.alipayUid;
   if (!amount || !uid) return res.status(400).send('参数不完整');
 
-  const bizData = JSON.stringify({ s: 'money', u: uid, a: amount.toFixed(2), m: memo });
-  const encodedBiz = encodeURIComponent(bizData);
-  // 支付宝内浏览器：用 alipay: 协议直接拉起转账（单冒号，支付宝内识别）
-  const inAppUrl = `alipay:platformapi/startapp?appId=20000123&actionType=scan&biz_data=${encodedBiz}`;
-  // 外部浏览器：用 ds.alipay.com 中转
-  const outAppUrl = `https://ds.alipay.com/?scheme=${encodeURIComponent('alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + encodedBiz)}`;
+  // 构造支付宝转账URL（appId=09999988 是转账功能）
+  const alipayTransferUrl = `alipays://platformapi/startapp?appId=09999988&actionType=toAccount&goBack=NO&userId=${encodeURIComponent(uid)}&amount=${amount.toFixed(2)}&memo=${encodeURIComponent(memo)}`;
+  // 外部浏览器备用：用 ds.alipay.com 中转
+  const dsUrl = `https://ds.alipay.com/?scheme=${encodeURIComponent(alipayTransferUrl)}`;
 
   res.send(`<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1262,24 +1260,10 @@ app.get('/m/:id/pay/', (req, res) => {
 <script>
 (function(){
   var isInAlipay = /AlipayClient|AliApp/i.test(navigator.userAgent);
-  var inAppUrl = ${JSON.stringify(inAppUrl)};
-  var outAppUrl = ${JSON.stringify(outAppUrl)};
-  var targetUrl = isInAlipay ? inAppUrl : outAppUrl;
+  var alipayTransferUrl = ${JSON.stringify(alipayTransferUrl)};
+  var dsUrl = ${JSON.stringify(dsUrl)};
+  var targetUrl = isInAlipay ? alipayTransferUrl : dsUrl;
   var payBtn = document.getElementById('payBtn');
-
-  function doJump(){
-    if(isInAlipay){
-      // 支付宝内：优先用 AlipayJSBridge，否则用 alipay: 协议
-      if(window.AlipayJSBridge){
-        window.AlipayJSBridge.call('startApp',{appId:'20000123',query:'actionType=scan&biz_data=${encodedBiz}'});
-      } else {
-        location.href = inAppUrl;
-      }
-    } else {
-      // 外部浏览器：用 ds.alipay.com 中转
-      location.href = outAppUrl;
-    }
-  }
 
   function showSuccess(){
     document.getElementById('jumpView').classList.add('hide');
@@ -1290,13 +1274,13 @@ app.get('/m/:id/pay/', (req, res) => {
   function showBtn(){
     document.getElementById('spinner').style.display='none';
     document.getElementById('statusText').textContent='请点击按钮打开支付宝';
-    document.getElementById('statusSub').textContent='如未安装支付宝，请先安装';
+    document.getElementById('statusSub').textContent='如未自动跳转，请手动点击';
     payBtn.href = targetUrl;
     payBtn.textContent = '打开支付宝';
     payBtn.classList.add('show');
   }
 
-  payBtn.addEventListener('click', function(e){ e.preventDefault(); doJump(); });
+  payBtn.addEventListener('click', function(e){ e.preventDefault(); location.href = targetUrl; });
 
   var hiddenOnce = false;
   document.addEventListener('visibilitychange', function(){
@@ -1304,9 +1288,18 @@ app.get('/m/:id/pay/', (req, res) => {
     else if(hiddenOnce){ showSuccess(); }
   });
 
-  doJump();
-  setTimeout(function(){ if(document.visibilityState === 'visible' && !hiddenOnce){ showBtn(); } }, 800);
-  setTimeout(function(){ if(document.visibilityState === 'visible' && !hiddenOnce){ doJump(); } }, 3000);
+  // 立即尝试跳转
+  location.href = targetUrl;
+
+  // 800ms 后如果还在当前页，显示手动按钮
+  setTimeout(function(){
+    if(document.visibilityState === 'visible' && !hiddenOnce){ showBtn(); }
+  }, 800);
+
+  // 3000ms 后再次尝试跳转（防止第一次失败）
+  setTimeout(function(){
+    if(document.visibilityState === 'visible' && !hiddenOnce){ location.href = targetUrl; }
+  }, 3000);
 })();
 </script>
 </body>
