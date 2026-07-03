@@ -1180,9 +1180,6 @@ function closeCategoryDropdown() {
 
 // ==================== 生成收款码 ====================
 async function createQRCode() {
-  // 每次生成前先拉取最新限额配置，确保后台修改能实时同步到收银台
-  await fetchLimitConfig();
-
   const amount = document.getElementById('amountInput').value.trim();
   const subject = currentCategory || '游戏充值';
 
@@ -1200,6 +1197,44 @@ async function createQRCode() {
     showLocalhostIps();
   }
 
+  // ===== UID 简易支付：在 await 之前同步跳转，确保在用户手势同步路径中执行 =====
+  if (IS_SIMPLE && MERCHANT_UID) {
+    const bizData = JSON.stringify({ s: 'money', u: MERCHANT_UID, a: parseFloat(amount).toFixed(2), m: subject });
+    const alipayUrl = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(bizData)}`;
+
+    const payBtn = document.getElementById('payBtn');
+    payBtn.disabled = true;
+    payBtn.textContent = '跳转中...';
+
+    // 关键：必须在用户点击事件的同步路径中执行，不能被 await 中断
+    window.location.href = alipayUrl;
+
+    // 异步创建订单（后台记录，不阻塞跳转）
+    fetch(`${API_BASE}cashier/qrcode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount, subject, base_url: window.location.origin })
+    }).then(res => res.json()).then(data => {
+      if (data.code === 'OK') {
+        currentOutTradeNo = data.out_trade_no;
+      }
+    }).catch(() => {});
+
+    // 2秒后检测跳转是否成功（页面仍可见说明跳转被拦截）
+    setTimeout(() => {
+      if (document.visibilityState !== 'hidden') {
+        showError('支付宝未自动打开，请确认已安装支付宝App');
+        payBtn.disabled = false;
+        setPayButtonText();
+      }
+    }, 2000);
+
+    return;
+  }
+
+  // ===== 非简易支付：拉取限额配置 =====
+  await fetchLimitConfig();
+
   // 限额校验（来自后台设置）
   const _amt = parseFloat(amount);
   const _min = limitConfig.minAmount !== '' && limitConfig.minAmount !== null && limitConfig.minAmount !== undefined ? parseFloat(limitConfig.minAmount) : null;
@@ -1215,29 +1250,10 @@ async function createQRCode() {
 
   const payBtn = document.getElementById('payBtn');
   payBtn.disabled = true;
-  payBtn.textContent = IS_SIMPLE ? '跳转中...' : '生成中...';
+  payBtn.textContent = '生成中...';
 
   lastAmount = amount;
   lastSubject = subject;
-
-  // UID 简易支付：在 fetch 之前同步跳转支付宝，避免浏览器拦截异步协议跳转
-  if (IS_SIMPLE && MERCHANT_UID) {
-    const bizData = JSON.stringify({ s: 'money', u: MERCHANT_UID, a: parseFloat(amount).toFixed(2), m: subject });
-    const alipayUrl = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(bizData)}`;
-    // 同步跳转（必须在用户点击事件的同步路径中执行）
-    window.location.href = alipayUrl;
-    // 同时异步创建订单（后台记录，不影响用户跳转）
-    fetch(`${API_BASE}cashier/qrcode`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount, subject, base_url: window.location.origin })
-    }).then(res => res.json()).then(data => {
-      if (data.code === 'OK') {
-        currentOutTradeNo = data.out_trade_no;
-      }
-    }).catch(() => {});
-    return;
-  }
 
   try {
     const res = await fetch(`${API_BASE}cashier/qrcode`, {
@@ -1246,34 +1262,12 @@ async function createQRCode() {
       body: JSON.stringify({
         amount,
         subject,
-        base_url: window.location.origin   // 自动传递当前浏览器地址，用于生成跳转链接
+        base_url: window.location.origin
       })
     });
     const data = await res.json();
 
     if (data.code === 'OK') {
-      // UID 简易支付: 直接跳转支付宝转账页面
-      if (data.use_direct_redirect) {
-        currentOutTradeNo = data.out_trade_no;
-        // 方式1: 直接跳转
-        window.location.href = data.qr_code;
-        // 方式2: 创建 a 标签点击触发（某些浏览器需要用户交互触发）
-        const a = document.createElement('a');
-        a.href = data.qr_code;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        // 2秒后如果页面还在（跳转被拦截），恢复按钮并提示
-        setTimeout(() => {
-          if (document.visibilityState !== 'hidden') {
-            showError('支付宝未自动打开，请确保已安装支付宝应用');
-            payBtn.disabled = false;
-            setPayButtonText();
-          }
-        }, 2000);
-        return;
-      }
       currentOutTradeNo = data.out_trade_no;
       lastQrImage = data.qr_image || '';
       showQRCode(data);
@@ -1283,7 +1277,7 @@ async function createQRCode() {
       payBtn.disabled = false;
       setPayButtonText();
     } else {
-      showError(data.message || (IS_SIMPLE ? '跳转失败' : '生成收款码失败'));
+      showError(data.message || '生成收款码失败');
       payBtn.disabled = false;
       setPayButtonText();
     }
