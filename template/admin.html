@@ -2209,45 +2209,6 @@
         </div>
       </div>
 
-      <!-- 支付宝配置编辑 -->
-      <div class="sec-card" id="alipayConfigCard">
-        <div class="sec-card-title">支付宝配置</div>
-        <div class="sec-card-desc">修改 AppID / 私钥 / 公钥后 SDK 将自动重新初始化</div>
-
-        <!-- SDK 状态提示 -->
-        <div id="alipaySdkStatus" style="display:none; padding:10px 14px; border-radius:8px; margin-bottom:16px; font-size:12px; font-weight:600; letter-spacing:0.5px;">
-        </div>
-
-        <div class="sec-field">
-          <label class="sec-label">App ID</label>
-          <input type="text" class="sec-input" id="alipayAppIdInput" placeholder="2021000123456789">
-        </div>
-
-        <div class="sec-field">
-          <label class="sec-label">Key Type（私钥格式）</label>
-          <select class="filter-select" id="alipayKeyTypeInput" style="width:100%;">
-            <option value="PKCS8">PKCS#8（-----BEGIN PRIVATE KEY-----）</option>
-            <option value="PKCS1">PKCS#1（-----BEGIN RSA PRIVATE KEY-----）</option>
-          </select>
-        </div>
-
-        <div class="sec-field">
-          <label class="sec-label">应用私钥</label>
-          <div class="pwd-input-wrap">
-            <textarea class="sec-input" id="alipayPrivateKeyInput" placeholder="粘贴应用私钥（含 BEGIN/END 行）" style="resize:vertical;min-height:80px;font-family:'SF Mono','Consolas',monospace;font-size:11px;"></textarea>
-          </div>
-        </div>
-
-        <div class="sec-field">
-          <label class="sec-label">支付宝公钥</label>
-          <div class="pwd-input-wrap">
-            <textarea class="sec-input" id="alipayPublicKeyInput" placeholder="粘贴支付宝公钥（含 BEGIN/END 行）" style="resize:vertical;min-height:80px;font-family:'SF Mono','Consolas',monospace;font-size:11px;"></textarea>
-          </div>
-        </div>
-
-        <button class="btn btn-primary" id="saveAlipayBtn" style="width:100%; padding:11px;" onclick="saveAlipayConfig()">保存支付宝配置</button>
-      </div>
-
     </div>
   </div>
 </div>
@@ -4033,7 +3994,6 @@ function switchPage(page) {
 // ===== 安全设置overlay（独立弹窗） =====
 function openSecurityOverlay() {
   loadSecurityConfig();
-  loadAlipayConfig();
   document.getElementById('securityOverlay').classList.add('show');
   document.body.style.overflow = 'hidden';
 }
@@ -4043,88 +4003,6 @@ function closeSecurityOverlay() {
   document.body.style.overflow = '';
 }
 
-// ===== 支付宝配置管理 =====
-async function loadAlipayConfig() {
-  try {
-    const res = await fetch('api/config/alipay');
-    const json = await res.json();
-    if (json.code === 'OK' && json.data) {
-      const d = json.data;
-      document.getElementById('alipayAppIdInput').value = d.appId || '';
-      document.getElementById('alipayPrivateKeyInput').value = d.privateKey || '';
-      document.getElementById('alipayPublicKeyInput').value = d.alipayPublicKey || '';
-      document.getElementById('alipayKeyTypeInput').value = d.keyType || 'PKCS8';
-
-      // 显示 SDK 状态
-      const statusEl = document.getElementById('alipaySdkStatus');
-      if (d.sdkError) {
-        statusEl.style.display = 'block';
-        statusEl.style.background = 'rgba(244,67,54,0.1)';
-        statusEl.style.border = '1px solid rgba(244,67,54,0.3)';
-        statusEl.style.color = '#ef9a9a';
-        statusEl.textContent = '⚠ ' + d.sdkError;
-      } else {
-        statusEl.style.display = 'block';
-        statusEl.style.background = 'rgba(76,175,80,0.1)';
-        statusEl.style.border = '1px solid rgba(76,175,80,0.3)';
-        statusEl.style.color = '#81c784';
-        statusEl.textContent = '✓ SDK 运行正常';
-      }
-    }
-  } catch (e) {
-    console.error('加载支付宝配置失败:', e);
-  }
-}
-
-async function saveAlipayConfig() {
-  const btn = document.getElementById('saveAlipayBtn');
-  const appId = document.getElementById('alipayAppIdInput').value.trim();
-  const privateKey = document.getElementById('alipayPrivateKeyInput').value.trim();
-  const alipayPublicKey = document.getElementById('alipayPublicKeyInput').value.trim();
-  const keyType = document.getElementById('alipayKeyTypeInput').value;
-
-  if (!appId) {
-    showAlert('请输入 App ID');
-    return;
-  }
-  if (!privateKey) {
-    showAlert('请输入应用私钥');
-    return;
-  }
-  if (!alipayPublicKey) {
-    showAlert('请输入支付宝公钥');
-    return;
-  }
-
-  btn.textContent = '保存中...';
-  btn.disabled = true;
-
-  try {
-    const res = await fetch('api/config/alipay', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ appId, privateKey, alipayPublicKey, keyType })
-    });
-    const json = await res.json();
-
-    if (json.code === 'OK') {
-      if (json.sdkError) {
-        showAlert('配置已保存，但 SDK 初始化失败：\n' + json.sdkError);
-      } else {
-        showAlert('✓ 支付宝配置已更新，SDK 重新初始化成功', '✅');
-      }
-      // 刷新状态
-      loadAlipayConfig();
-    } else {
-      showAlert('保存失败：' + (json.message || '未知错误'));
-    }
-  } catch (e) {
-    showAlert('保存失败：' + e.message);
-  } finally {
-    btn.textContent = '保存支付宝配置';
-    btn.disabled = false;
-  }
-}
 
 // ==================== 限额设置 ====================
 function stepLimitInput(id, delta, isAmount) {
