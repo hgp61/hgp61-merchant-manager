@@ -1414,6 +1414,7 @@ function stepAmount(delta) {
   document.addEventListener('touchstart', function(e) {
     var btn = e.target.closest('.step-up, .step-down');
     if (!btn) return;
+    e.preventDefault(); // 阻止浏览器合成 mousedown 事件，避免重复触发
     startPress(parseFloat(btn.getAttribute('data-delta')));
   }, { passive: false, capture: true });
 
