@@ -62,6 +62,9 @@ const CONFIG = {
 
     // 支付宝网关（通常无需修改）
     gateway: 'https://openapi.alipay.com/gateway.do',
+
+    // 私钥格式: PKCS1 / PKCS8（由商户管理系统注入）
+    keyType: 'PKCS8',
   },
 
   // 支付宝商户名（由商户管理系统注入，用于后台默认显示）
@@ -132,13 +135,31 @@ setInterval(cleanExpiredSessions, 10 * 60 * 1000); // 每10分钟清理一次
 
 // ======================== 【创建支付宝客户端】 ========================
 
-const alipaySdk = new AlipaySdk({
-  appId: CONFIG.alipay.appId,
-  privateKey: CONFIG.alipay.privateKey,
-  alipayPublicKey: CONFIG.alipay.alipayPublicKey,
-  gateway: CONFIG.alipay.gateway,
-  keyType: 'PKCS8',
-});
+let alipaySdk = null;
+let alipaySdkError = null;
+
+function createAlipaySdk() {
+  const cfg = CONFIG.alipay;
+  console.log(`>>> [支付宝] 初始化 SDK: appId=${cfg.appId}, keyType=${cfg.keyType}, gateway=${cfg.gateway}`);
+  try {
+    alipaySdk = new AlipaySdk({
+      appId: cfg.appId,
+      privateKey: cfg.privateKey,
+      alipayPublicKey: cfg.alipayPublicKey,
+      gateway: cfg.gateway,
+      keyType: cfg.keyType || 'PKCS8',
+    });
+    alipaySdkError = null;
+    console.log('>>> [支付宝] SDK 初始化成功');
+    return null;
+  } catch (e) {
+    alipaySdkError = 'SDK 初始化失败: ' + e.message + '。请检查：1) appId 是否正确；2) 私钥格式是否匹配 keyType（PKCS#1 选择 PKCS1，PKCS#8 选择 PKCS8）；3) 支付宝公钥是否正确';
+    console.error('>>> [支付宝] ' + alipaySdkError);
+    return alipaySdkError;
+  }
+}
+
+createAlipaySdk();
 
 // ======================== 【收银台 - 支付宝加密支付】 ========================
 
@@ -221,6 +242,14 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
 
   if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
     return res.status(400).json({ code: 'ERROR', message: '请输入有效金额' });
+  }
+
+  // SDK 未初始化检查
+  if (!alipaySdk) {
+    return res.status(500).json({
+      code: 'SDK_ERROR',
+      message: alipaySdkError || '支付宝 SDK 未初始化，请检查支付宝配置（appId/私钥/公钥/keyType）'
+    });
   }
 
   const outTradeNo = `QR_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -461,6 +490,14 @@ app.post('/api/refund', express.json(), async (req, res) => {
 
   if (order.refund) {
     return res.status(400).json({ code: 'ERROR', message: '该订单已退款，不能重复退款' });
+  }
+
+  // SDK 未初始化检查
+  if (!alipaySdk) {
+    return res.status(500).json({
+      code: 'SDK_ERROR',
+      message: alipaySdkError || '支付宝 SDK 未初始化，请检查支付宝配置'
+    });
   }
 
   const amount = refundAmount ? parseFloat(refundAmount).toFixed(2) : order.amount;
@@ -1013,6 +1050,68 @@ app.post('/api/limits', express.json(), async (req, res) => {
   fs.writeFileSync(LIMITS_FILE, JSON.stringify(limitsConfig, null, 2), 'utf8');
   console.log('>>> [限额] 已更新限额配置:', JSON.stringify(limitsConfig));
   res.json({ code: 'OK', success: true });
+});
+
+// ======================== 【支付宝配置管理】 ========================
+
+// 获取当前支付宝配置（私钥脱敏）
+app.get('/api/config/alipay', (req, res) => {
+  const cfg = CONFIG.alipay;
+  // 私钥脱敏：只显示前后各10个字符
+  let maskedKey = '';
+  if (cfg.privateKey) {
+    const pk = cfg.privateKey;
+    if (pk.length > 30) {
+      maskedKey = pk.substring(0, 15) + '...' + pk.substring(pk.length - 15);
+    } else {
+      maskedKey = pk.substring(0, 5) + '...';
+    }
+  }
+  res.json({
+    code: 'OK',
+    data: {
+      appId: cfg.appId,
+      privateKey: cfg.privateKey,  // 完整私钥（确认修改时需要）
+      privateKeyMasked: maskedKey,
+      alipayPublicKey: cfg.alipayPublicKey,
+      keyType: cfg.keyType || 'PKCS8',
+      sdkError: alipaySdkError || null,
+    }
+  });
+});
+
+// 更新支付宝配置并重新初始化 SDK
+app.post('/api/config/alipay', express.json(), async (req, res) => {
+  const { appId, privateKey, alipayPublicKey, keyType } = req.body;
+  const cfg = CONFIG.alipay;
+
+  if (appId !== undefined) cfg.appId = appId;
+  if (alipayPublicKey !== undefined) cfg.alipayPublicKey = alipayPublicKey.trim();
+  if (keyType !== undefined) cfg.keyType = keyType;
+
+  if (privateKey !== undefined) {
+    let trimmedKey = privateKey.trim();
+    if (trimmedKey && !trimmedKey.includes('-----BEGIN') && !trimmedKey.includes('-----END')) {
+      const userKeyType = (cfg.keyType || 'PKCS8').trim().toUpperCase();
+      if (userKeyType === 'PKCS1') {
+        trimmedKey = '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
+      } else {
+        trimmedKey = '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----';
+      }
+    }
+    cfg.privateKey = trimmedKey;
+  }
+
+  // 重新初始化 SDK
+  const err = createAlipaySdk();
+
+  console.log(`>>> [支付宝] 配置已更新: appId=${cfg.appId}, keyType=${cfg.keyType}, sdkError=${err || '无'}`);
+
+  res.json({
+    code: 'OK',
+    message: err ? '配置已保存，但 SDK 初始化失败：' + err : '配置已更新，SDK 重新初始化成功',
+    sdkError: err || null,
+  });
 });
 
 // 从数据库恢复历史订单和安全配置，然后启动服务

@@ -107,17 +107,19 @@ function getMerchantRuntime(id, merchant) {
     try {
       const keyType = (merchant.keyType === 'PKCS8' || (merchant.privateKey || '').includes('BEGIN PRIVATE KEY')
         && !(merchant.privateKey || '').includes('BEGIN RSA PRIVATE KEY')) ? 'PKCS8' : 'PKCS1';
+      const privateKeyPreview = (merchant.privateKey || '').substring(0, 30).replace(/\n/g, '\\n');
+      console.log(`[商户:${id}] 尝试初始化 AlipaySdk: appId=${merchant.appId}, keyType=${keyType}, keyPreview=${privateKeyPreview}...`);
       runtime.alipaySdk = new AlipaySdk({
-        appId: merchant.appId,
+        appId: String(merchant.appId),
         privateKey: merchant.privateKey,
-        alipayPublicKey: merchant.alipayPublicKey,
+        alipayPublicKey: merchant.alipayPublicKey || '',
         gateway: 'https://openapi.alipay.com/gateway.do',
         keyType,
       });
       console.log(`[商户:${id}] AlipaySdk 初始化成功 (keyType=${keyType})`);
     } catch (e) {
       console.error(`[商户:${id}] AlipaySdk 初始化失败:`, e.message);
-      runtime.alipaySdkError = e.message;
+      runtime.alipaySdkError = `AlipaySdk 初始化失败: ${e.message}。请检查：1) appId 是否正确；2) 私钥格式是否与 keyType 匹配（当前 keyType=${merchant.keyType}）；3) 私钥是否完整。`;
     }
   } else {
     console.log(`[商户:${id}] 跳过 AlipaySdk 初始化: type=${merchant.type}, hasAppId=${!!merchant.appId}, hasPrivateKey=${!!merchant.privateKey}`);
@@ -218,6 +220,9 @@ function injectConfig(templateIndexJs, config) {
   result = result.replace(/appId:\s*['"].*?['"],/, `appId: '${config.appId}',`);
   result = result.replace(/privateKey:\s*['"][\s\S]*?['"],/, () => `privateKey: \`${config.privateKey}\`,`);
   result = result.replace(/alipayPublicKey:\s*['"].*?['"],/, `alipayPublicKey: '${config.alipayPublicKey}',`);
+  if (config.keyType) {
+    result = result.replace(/keyType:\s*['"].*?['"],/, `keyType: '${config.keyType}',`);
+  }
   if (config.merchantName) {
     result = result.replace(/merchantName:\s*['"].*?['"],/, `merchantName: '${config.merchantName}',`);
   }
@@ -305,7 +310,7 @@ app.get('/api/stats', requireAuth, (req, res) => {
 });
 
 app.post('/api/merchants', requireAuth, (req, res) => {
-  const { merchantName, phone, appId, privateKey, alipayPublicKey } = req.body;
+  const { merchantName, phone, appId, privateKey, alipayPublicKey, keyType: reqKeyType } = req.body;
   if (!phone || !/^1\d{10}$/.test(phone.trim())) {
     return res.json({ code: 'FAIL', message: '请输入有效的 11 位手机号' });
   }
@@ -314,17 +319,35 @@ app.post('/api/merchants', requireAuth, (req, res) => {
   }
 
   let trimmedKey = privateKey.trim();
+  const userKeyType = (reqKeyType || 'auto').trim().toUpperCase();
+
+  // 如果私钥不包含 BEGIN/END 头尾，自动补全
   if (!trimmedKey.includes('-----BEGIN') && !trimmedKey.includes('-----END')) {
-    trimmedKey = trimmedKey.startsWith('MII')
-      ? '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----'
-      : '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
+    if (userKeyType === 'PKCS1') {
+      trimmedKey = '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
+    } else if (userKeyType === 'PKCS8') {
+      trimmedKey = '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----';
+    } else {
+      // 自动检测：以 MII 开头默认 PKCS#8（支付宝新版推荐），否则 PKCS#1
+      trimmedKey = trimmedKey.startsWith('MII')
+        ? '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----'
+        : '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
+    }
   }
   if (!trimmedKey.includes('BEGIN PRIVATE KEY') && !trimmedKey.includes('BEGIN RSA PRIVATE KEY')) {
     return res.json({ code: 'FAIL', message: '私钥格式不正确' });
   }
 
-  const isPKCS8 = trimmedKey.includes('BEGIN PRIVATE KEY');
-  const keyType = isPKCS8 ? 'PKCS8' : 'PKCS1';
+  // 判定 keyType：优先使用用户选择，否则自动检测
+  let keyType;
+  if (userKeyType === 'PKCS1') {
+    keyType = 'PKCS1';
+  } else if (userKeyType === 'PKCS8') {
+    keyType = 'PKCS8';
+  } else {
+    const isPKCS8 = trimmedKey.includes('BEGIN PRIVATE KEY') && !trimmedKey.includes('BEGIN RSA PRIVATE KEY');
+    keyType = isPKCS8 ? 'PKCS8' : 'PKCS1';
+  }
 
   const id = genId();
   const fileName = genFileName();
@@ -458,6 +481,8 @@ app.put('/api/merchants/:id', requireAuth, (req, res) => {
   const list = loadMerchants();
   const merchant = list.find(m => m.id === req.params.id);
   if (!merchant) return res.status(404).json({ code: 'FAIL', message: '商户不存在' });
+
+  // 更新基本信息
   if (req.body.merchantName !== undefined) {
     merchant.merchantName = req.body.merchantName;
     // 同步本地运行时
@@ -471,7 +496,41 @@ app.put('/api/merchants/:id', requireAuth, (req, res) => {
   if (req.body.merchantUrl !== undefined) {
     merchant.merchantUrl = req.body.merchantUrl.trim();
   }
+
+  // 更新支付宝配置（当面付商户）
+  if (merchant.type !== 'uid') {
+    if (req.body.appId !== undefined) merchant.appId = req.body.appId;
+    if (req.body.alipayPublicKey !== undefined) merchant.alipayPublicKey = req.body.alipayPublicKey.trim();
+    if (req.body.keyType !== undefined) merchant.keyType = req.body.keyType;
+
+    if (req.body.privateKey !== undefined) {
+      let trimmedKey = req.body.privateKey.trim();
+      if (trimmedKey) {
+        if (!trimmedKey.includes('-----BEGIN') && !trimmedKey.includes('-----END')) {
+          const userKeyType = (merchant.keyType || 'auto').trim().toUpperCase();
+          if (userKeyType === 'PKCS1') {
+            trimmedKey = '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
+          } else if (userKeyType === 'PKCS8') {
+            trimmedKey = '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----';
+          } else {
+            trimmedKey = trimmedKey.startsWith('MII')
+              ? '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----'
+              : '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
+          }
+        }
+        merchant.privateKey = trimmedKey;
+      }
+    }
+  }
+
   saveMerchants(list);
+
+  // 如果更新了支付宝配置，清除运行时缓存，下次访问时重新初始化
+  if (req.body.appId !== undefined || req.body.privateKey !== undefined || req.body.alipayPublicKey !== undefined || req.body.keyType !== undefined) {
+    merchantRuntimes.delete(req.params.id);
+    console.log(`[商户:${req.params.id}] 支付宝配置已更新，运行时缓存已清除，下次访问时重新初始化`);
+  }
+
   res.json({ code: 'OK', data: { ...merchant, password: undefined } });
 });
 
@@ -500,6 +559,7 @@ app.post('/api/merchants/:id/deploy', requireAuth, async (req, res) => {
       appId: merchant.appId || '',
       privateKey: merchant.privateKey || '',
       alipayPublicKey: merchant.alipayPublicKey || '',
+      keyType: merchant.keyType || 'PKCS8',
       merchantName: merchant.merchantName || '',
       merchantPhone: merchant.phone || '',
       merchantPassword: 'yy123456',

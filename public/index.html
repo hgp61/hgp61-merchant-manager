@@ -655,9 +655,18 @@
         <input type="text" class="form-input" id="inputAppId" placeholder="如：2021...">
       </div>
       <div class="form-group">
-        <label class="form-label form-label-required">应用私钥（PKCS#8）</label>
-        <div class="form-hint">只需填写中间部分，头尾 BEGIN / END 自动补全</div>
+        <label class="form-label form-label-required">应用私钥（PKCS#1 / PKCS#8）</label>
+        <div class="form-hint">支持 PKCS#1（BEGIN RSA PRIVATE KEY）或 PKCS#8（BEGIN PRIVATE KEY），头尾自动补全</div>
         <textarea class="form-textarea" id="inputPrivateKey" placeholder="MIIE..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-required">私钥格式</label>
+        <div class="form-hint">请根据实际私钥格式选择，选错会导致支付初始化失败</div>
+        <select class="form-input" id="inputKeyType" style="font-family:inherit;">
+          <option value="auto">自动检测（推荐）</option>
+          <option value="PKCS8">PKCS#8</option>
+          <option value="PKCS1">PKCS#1</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label form-label-required">支付宝公钥</label>
@@ -981,6 +990,7 @@ async function submitFaceMerchant() {
   const appId = document.getElementById('inputAppId').value.trim();
   let privateKey = document.getElementById('inputPrivateKey').value.trim();
   const alipayPublicKey = document.getElementById('inputAlipayPublicKey').value.trim();
+  const keyType = document.getElementById('inputKeyType').value;
 
   if (!merchantName) return showToast('请填写支付宝商户名', 'error');
   if (!validatePhone(phone)) return showToast('请输入有效的 11 位手机号', 'error');
@@ -996,7 +1006,7 @@ async function submitFaceMerchant() {
     const res = await fetch('/api/merchants', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ merchantName, phone, appId, privateKey, alipayPublicKey }),
+      body: JSON.stringify({ merchantName, phone, appId, privateKey, alipayPublicKey, keyType }),
     });
     const json = await res.json();
 
