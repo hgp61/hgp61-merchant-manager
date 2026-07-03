@@ -3811,7 +3811,7 @@ function renderMerchantQRCode() {
   }, 500);
 }
 
-// 下载商户收款二维码图片（生成完整面板截图，2K分辨率）
+// 下载商户收款二维码图片（生成完整面板截图，参考图布局，2K分辨率）
 function downloadMerchantQRImage() {
   if (!_merchantQrDataUrl) { showAlert('二维码尚未生成完成，请稍后再试'); return; }
 
@@ -3821,13 +3821,11 @@ function downloadMerchantQRImage() {
   panelCanvas.height = h;
   var ctx = panelCanvas.getContext('2d');
 
-  // 同时加载 logo 和二维码，两个都加载完毕后一起绘制
   var loadedCount = 0;
   var logoImg = new Image();
   var qrImg = new Image();
 
   function onAllLoaded() {
-    // 开启高质量图像平滑
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
@@ -3844,7 +3842,7 @@ function downloadMerchantQRImage() {
     roundRect(ctx, 4, 4, w-8, h-8, 60, false, true);
 
     // ====== Logo 圆形区域（绘制真实 logo） ======
-    var ls = 96, lx = w/2 - ls/2, ly = 100;
+    var ls = 144, lx = w/2 - ls/2, ly = 130;
     ctx.save();
     ctx.beginPath();
     ctx.arc(w/2, ly+ls/2, ls/2, 0, Math.PI*2);
@@ -3852,79 +3850,79 @@ function downloadMerchantQRImage() {
     ctx.clip();
     ctx.fillStyle = '#121008';
     ctx.fill();
-    try { ctx.drawImage(logoImg, lx+10, ly+10, ls-20, ls-20); } catch(e) {}
+    try { ctx.drawImage(logoImg, lx+16, ly+16, ls-32, ls-32); } catch(e) {}
     ctx.restore();
     // 金色圆环边框
     ctx.beginPath();
     ctx.arc(w/2, ly+ls/2, ls/2, 0, Math.PI*2);
     ctx.strokeStyle = 'rgba(212,175,55,0.5)';
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 8;
     ctx.stroke();
 
     // ====== 品牌名 ======
-    ctx.font = 'bold 80px sans-serif';
+    ctx.font = 'bold 96px sans-serif';
     ctx.fillStyle = '#f0d77a';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('黑金PAY', w/2, 250);
+    ctx.fillText('黑金PAY', w/2, 470);
 
     // slogan
-    ctx.font = '40px sans-serif';
+    ctx.font = '48px sans-serif';
     ctx.fillStyle = 'rgba(212,175,55,0.5)';
-    ctx.fillText('安全收款 · 即时到账', w/2, 360);
+    ctx.fillText('安全收款 · 即时到账', w/2, 564);
 
-    // badge（与slogan间距加大到80px）
-    var bW=440,bH=80,bX=(w-bW)/2,bY=460;
+    // badge
+    var bW=520,bH=104,bX=(w-bW)/2,bY=596;
     ctx.fillStyle='rgba(30,26,16,0.9)';
-    roundRect(ctx,bX,bY,bW,bH,40,true,false);
+    roundRect(ctx,bX,bY,bW,bH,52,true,false);
     ctx.strokeStyle='rgba(212,175,55,0.3)';
     ctx.lineWidth=4;
-    roundRect(ctx,bX,bY,bW,bH,40,false,true);
-    ctx.font='36px sans-serif';
+    roundRect(ctx,bX,bY,bW,bH,52,false,true);
+    ctx.font='44px sans-serif';
     ctx.fillStyle='rgba(212,175,55,0.7)';
-    ctx.fillText('\uD83D\uDD12 支付宝实时交易', w/2, bY+bH/2+3);
+    ctx.fillText('🔒 支付宝实时交易', w/2, bY+bH/2+4);
 
     // 标题
-    ctx.font='bold 48px sans-serif';
+    ctx.font='bold 60px sans-serif';
     ctx.fillStyle='#d4af37';
-    ctx.fillText('收款二维码', w/2, 600);
+    ctx.fillText('收款二维码', w/2, 812);
 
     // 二维码白底框
-    var qbx=(w-900)/2,qby=688,qbs=900;
+    var qbx=(w-880)/2,qby=900,qbs=880;
     ctx.fillStyle='#ffffff';
-    roundRect(ctx,qbx,qby,qbs,qbs,40,true,false);
+    roundRect(ctx,qbx,qby,qbs,qbs,56,true,false);
 
-    // 绘制二维码（四周留白 90px）
-    try { ctx.drawImage(qrImg, qbx+90, qby+90, 720, 720); } catch(e) {}
+    // 绘制二维码（四周留白 88px）
+    try { ctx.drawImage(qrImg, qbx+88, qby+88, 704, 704); } catch(e) {}
 
     // 二维码中心 Logo（不影响扫码，H级纠错可容忍30%遮挡）
-    var logoSize = 120;
-    var logoCX = qbx + 90 + 720/2;
-    var logoCY = qby + 90 + 720/2;
+    var logoSize = 160;
+    var logoCX = qbx + 88 + 704/2;
+    var logoCY = qby + 88 + 704/2;
     // 白底圆
     ctx.beginPath();
-    ctx.arc(logoCX, logoCY, logoSize/2 + 12, 0, Math.PI*2);
+    ctx.arc(logoCX, logoCY, logoSize/2 + 16, 0, Math.PI*2);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
     // 金色圆环
     ctx.beginPath();
-    ctx.arc(logoCX, logoCY, logoSize/2 + 6, 0, Math.PI*2);
+    ctx.arc(logoCX, logoCY, logoSize/2 + 8, 0, Math.PI*2);
     ctx.strokeStyle = 'rgba(212,175,55,0.6)';
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 8;
     ctx.stroke();
     // 绘制 logo 图片
     ctx.save();
     ctx.beginPath();
-    ctx.arc(logoCX, logoCY, logoSize/2 - 3, 0, Math.PI*2);
+    ctx.arc(logoCX, logoCY, logoSize/2 - 4, 0, Math.PI*2);
     ctx.closePath();
     ctx.clip();
-    try { ctx.drawImage(logoImg, logoCX - logoSize/2 + 3, logoCY - logoSize/2 + 3, logoSize - 6, logoSize - 6); } catch(e) {}
+    try { ctx.drawImage(logoImg, logoCX - logoSize/2 + 4, logoCY - logoSize/2 + 4, logoSize - 8, logoSize - 8); } catch(e) {}
     ctx.restore();
 
-    // 底部提示
-    ctx.font='40px sans-serif';
+    // 底部提示（只保留一行）
+    ctx.font='52px sans-serif';
     ctx.fillStyle='rgba(212,175,55,0.45)';
-    ctx.fillText('使用支付宝扫一扫完成支付', w/2, qby+qbs+100);
+    ctx.fillText('使用支付宝扫一扫完成支付', w/2, qby+qbs+120);
 
     // 导出下载
     var link = document.createElement('a');
