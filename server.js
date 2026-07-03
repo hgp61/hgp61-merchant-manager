@@ -1314,6 +1314,8 @@ app.get('/m/:id/api/security', (req, res) => {
       merchantName: getMerchantNameForSession(req),
       merchantContact: sec.merchantContact || '',
       merchantPhone: phone || sec.merchantPhone || '',
+      type: req.merchant.type || 'face',
+      alipayUid: req.merchant.alipayUid || '',
     },
   });
 });
