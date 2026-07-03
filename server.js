@@ -816,7 +816,7 @@ function handleAlipayRedirect(req, res, next) {
 
 // 商户静态文件（根据类型选择模板目录）
 app.use('/m/:id', (req, res, next) => {
-  const templateDir = req.merchant.type === 'uid' ? UID_TEMPLATE_DIR : TEMPLATE_DIR;
+  const templateDir = (req.merchant.type === 'uid' || req.merchant.type === 'uid-simple') ? UID_TEMPLATE_DIR : TEMPLATE_DIR;
   express.static(templateDir)(req, res, next);
 });
 
@@ -1434,7 +1434,7 @@ app.get('/m/:id/api/network-info', (req, res) => {
 app.get('/m/:id/api/config', (req, res) => {
   const m = req.merchant;
   const uidMasked = m.alipayUid ? m.alipayUid.slice(0, 4) + '****' + m.alipayUid.slice(-4) : '未配置';
-  res.json({ code: 'OK', data: { alipayUid: uidMasked, hasUid: !!m.alipayUid, hasPaymentApi: false, merchantName: m.merchantName || '未配置' } });
+  res.json({ code: 'OK', data: { alipayUid: uidMasked, hasUid: !!m.alipayUid, hasPaymentApi: false, merchantName: m.merchantName || '未配置', type: m.type || 'face' } });
 });
 
 // ======================== 启动服务 ========================

@@ -1023,7 +1023,7 @@
     <button class="pay-btn" id="payBtn" onclick="createQRCode()">
       生成收款码
     </button>
-    <p class="pay-hint">点击生成支付宝收款二维码，用户扫码支付</p>
+    <p class="pay-hint" id="payHint">点击生成支付宝收款二维码，用户扫码支付</p>
   </div>
 
   <!-- 支付等待/处理区域 -->
@@ -1096,6 +1096,7 @@
 <script>
 // ==================== 配置 ====================
 const API_BASE = '';
+let IS_SIMPLE = false; // 是否为 UID 简易支付模式（页面加载后通过 api/config 获取）
 
 // ==================== 状态 ====================
 let currentOutTradeNo = '';
@@ -1106,6 +1107,33 @@ let lastQrImage = '';
 let currentCategory = '游戏充值';
 let cdOpen = false;
 let limitConfig = {};  // 从 /api/limits 拉取的限额配置
+
+// 根据类型设置按钮文字
+function setPayButtonText() {
+  const btn = document.getElementById('payBtn');
+  const hint = document.getElementById('payHint');
+  if (!btn || !hint) return;
+  if (IS_SIMPLE) {
+    btn.textContent = '立即支付';
+    hint.textContent = '点击立即跳转支付宝转账页面';
+  } else {
+    btn.textContent = '生成收款码';
+    hint.textContent = '点击生成支付宝收款二维码，用户扫码支付';
+  }
+}
+
+// 初始化：获取商户类型
+async function initPayButton() {
+  try {
+    const res = await fetch('api/config');
+    const json = await res.json();
+    if (json.code === 'OK' && json.data && json.data.type === 'uid-simple') {
+      IS_SIMPLE = true;
+    }
+  } catch (e) {}
+  setPayButtonText();
+}
+initPayButton();
 
 // ==================== 自定义下拉框 ====================
 function toggleCategoryDropdown(e) {
@@ -1184,7 +1212,7 @@ async function createQRCode() {
 
   const payBtn = document.getElementById('payBtn');
   payBtn.disabled = true;
-  payBtn.textContent = '生成中...';
+  payBtn.textContent = IS_SIMPLE ? '跳转中...' : '生成中...';
 
   lastAmount = amount;
   lastSubject = subject;
@@ -1215,16 +1243,16 @@ async function createQRCode() {
     } else if (data.code === 'ALIPAY_ERROR') {
       showAlipayError(data.alipay_code, data.alipay_sub_code, data.alipay_sub_msg, data.alipay_msg);
       payBtn.disabled = false;
-      payBtn.textContent = '生成收款码';
+      setPayButtonText();
     } else {
-      showError(data.message || '生成收款码失败');
+      showError(data.message || (IS_SIMPLE ? '跳转失败' : '生成收款码失败'));
       payBtn.disabled = false;
-      payBtn.textContent = '生成收款码';
+      setPayButtonText();
     }
   } catch (err) {
     showError('网络错误：' + err.message);
     payBtn.disabled = false;
-    payBtn.textContent = '生成收款码';
+    setPayButtonText();
   }
 }
 
@@ -1334,7 +1362,7 @@ function resetToInput() {
   document.querySelector('.merchant-header').classList.remove('compact');
 
   document.getElementById('payBtn').disabled = false;
-  document.getElementById('payBtn').textContent = '生成收款码';
+  setPayButtonText();
 
   document.getElementById('amountInput').value = '';
   document.getElementById('amountInput').focus();
