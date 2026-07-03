@@ -16,15 +16,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 .hr{height:1px;background:rgba(212,175,55,0.1);margin:20px 0 24px}
 .btn{display:block;width:100%;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;border-radius:14px;padding:16px 0;font-size:18px;font-weight:800;text-decoration:none;letter-spacing:3px;cursor:pointer;margin-bottom:12px;box-shadow:0 4px 20px rgba(212,175,55,0.25);-webkit-tap-highlight-color:transparent}
 .btn:active{opacity:0.85;transform:scale(0.98)}
-.tip{font-size:11px;color:rgba(255,255,255,0.18);margin-top:20px;line-height:1.8;text-align:left}
-.tip li{list-style:none;padding-left:14px;position:relative}
-.tip li:before{content:"●";position:absolute;left:0;color:rgba(212,175,55,0.3);font-size:8px;top:3px}
-.fallback{margin-top:20px;padding:16px;background:rgba(212,175,55,0.05);border-radius:12px;border:1px solid rgba(212,175,55,0.1);display:none}
-.fallback.show{display:block}
-.fallback-title{font-size:13px;font-weight:700;color:#d4af37;margin-bottom:10px}
-.uid-box{font-size:16px;font-weight:800;color:#fff;background:rgba(212,175,55,0.1);padding:10px 0;border-radius:8px;margin-bottom:10px;letter-spacing:2px}
-.copy-btn{display:inline-block;background:transparent;color:#d4af37;border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:8px 20px;font-size:13px;cursor:pointer}
-.copy-btn:active{background:rgba(212,175,55,0.1)}
+.btn2{display:block;width:100%;background:transparent;color:#d4af37;border:1px solid rgba(212,175,55,0.3);border-radius:14px;padding:14px 0;font-size:15px;font-weight:600;text-decoration:none;letter-spacing:2px;cursor:pointer;margin-bottom:8px;-webkit-tap-highlight-color:transparent}
+.uid-section{margin-top:20px;padding:16px;background:rgba(212,175,55,0.05);border-radius:12px;border:1px solid rgba(212,175,55,0.1);display:none}
+.uid-section.show{display:block}
+.uid-label{font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:8px}
+.uid-value{font-size:18px;font-weight:800;color:#fff;letter-spacing:2px;margin-bottom:12px;word-break:break-all}
+.copy-btn{display:inline-block;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .hide{display:none!important}
 .done{display:none;text-align:center}
 .done.show{display:block}
@@ -42,19 +39,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     <div class="memo" id="memo" style="display:none"></div>
     <div class="hr"></div>
     <a class="btn" id="btn1" href="#">打开支付宝付款</a>
-    <div class="fallback" id="fallback">
-      <div class="fallback-title">未能自动跳转？</div>
-      <div class="uid-box" id="uidBox"></div>
-      <button class="copy-btn" id="copyBtn">复制UID</button>
-      <div class="tip" style="margin-top:10px;text-align:center">
-        请打开支付宝 → 搜索上方UID → 转账即可
-      </div>
+    <a class="btn2" id="btn2" href="#" style="display:none">用 H5 链接付款</a>
+    <div class="uid-section" id="uidSection">
+      <div class="uid-label">若以上方式均无效，请复制 UID 手动转账</div>
+      <div class="uid-value" id="uidValue"></div>
+      <button class="copy-btn" id="copyBtn">复制 UID</button>
     </div>
-    <ul class="tip" id="mainTip">
-      <li>点击按钮后，系统将自动打开支付宝</li>
-      <li>金额已锁定，确认无误后输入密码即可</li>
-      <li>若提示风险请点击「仍然支付」继续</li>
-    </ul>
   </div>
   <div id="doneView" class="done">
     <div class="logo">黑金PAY</div>
@@ -74,53 +64,66 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 
   document.getElementById('amount').textContent = '¥' + parseFloat(amount).toFixed(2);
   document.getElementById('amount2').textContent = '¥' + parseFloat(amount).toFixed(2);
+  document.getElementById('uidValue').textContent = uid;
 
   if(memo){
     document.getElementById('memo').textContent = memo;
     document.getElementById('memo').style.display = 'block';
   }
 
-  // 构造 alipays:// 链接
+  // 构造 alipays:// 链接（支付宝内置浏览器用这个）
   var biz = JSON.stringify({ s:'money', u:uid, a:parseFloat(amount).toFixed(2), m:memo });
   var ebiz = encodeURIComponent(biz);
   var alipaysUrl = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz;
-  var intentUrl = 'intent://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz + '#Intent;scheme=alipays;package=com.eg.android.AlipayGphone;end;';
 
-  // 显示UID到备用区域
-  document.getElementById('uidBox').textContent = uid;
+  // 构造 H5 中转链接（部分外部浏览器点这个能跳到支付宝）
+  // ds.alipay.com 是支付宝的 H5 中转页，会在支付宝 App 内打开
+  var dsUrl = 'https://ds.alipay.com/?appId=20000123&actionType=scan&biz_data=' + ebiz;
 
-  // 点击按钮：尝试唤起支付宝（Android用intent，iOS用alipays）
+  // 显示 H5 链接按钮（Android 显示，iOS 不显示因为 ds.alipay.com 在 iOS 上效果不好）
+  if (/android/i.test(navigator.userAgent)) {
+    document.getElementById('btn2').style.display = 'block';
+    document.getElementById('btn2').href = dsUrl;
+  }
+
+  // 主按钮：尝试唤起支付宝
   document.getElementById('btn1').addEventListener('click', function(e) {
     e.preventDefault();
     var ua = navigator.userAgent;
+
+    // 先尝试用 alipays:// 唤起
     if (/android/i.test(ua)) {
+      // Android: 用 intent 协议，指定支付宝包名
+      var intentUrl = 'intent://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz + '#Intent;scheme=alipays;package=com.eg.android.AlipayGphone;end';
       location.href = intentUrl;
+      // 备用：直接 alipays://
+      setTimeout(function() { location.href = alipaysUrl; }, 300);
     } else {
+      // iOS: 直接 alipays://
       location.href = alipaysUrl;
     }
-    // 2秒后如果页面还在，显示备用方案（复制UID）
+
+    // 2 秒后如果页面还在，显示 UID 备用方案
     setTimeout(function() {
       if (document.visibilityState === 'visible') {
-        document.getElementById('fallback').classList.add('show');
-        document.getElementById('mainTip').classList.add('hide');
+        document.getElementById('uidSection').classList.add('show');
       }
     }, 2000);
   });
 
-  // 复制UID
+  // 复制 UID
   document.getElementById('copyBtn').addEventListener('click', function() {
+    var text = '支付宝UID：' + uid + '，金额：¥' + parseFloat(amount).toFixed(2) + (memo ? '，备注：' + memo : '');
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(uid).then(function() {
-        alert('UID 已复制：' + uid);
-      });
+      navigator.clipboard.writeText(text).then(function() { alert('已复制收款信息'); });
     } else {
       var ta = document.createElement('textarea');
-      ta.value = uid;
+      ta.value = text;
       document.body.appendChild(ta);
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      alert('UID 已复制：' + uid);
+      alert('已复制收款信息');
     }
   });
 
