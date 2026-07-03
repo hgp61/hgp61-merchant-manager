@@ -469,7 +469,7 @@ app.put('/api/merchants/:id', requireAuth, (req, res) => {
 });
 
 // ===== 一键部署商户收款后台到 GitHub =====
-const GITHUB_TOKEN = 'TOKEN_REMOVED';
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const GITHUB_USER = 'hgp61';
 
 app.post('/api/merchants/:id/deploy', requireAuth, async (req, res) => {
