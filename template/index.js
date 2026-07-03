@@ -140,23 +140,40 @@ let alipaySdkError = null;
 
 function createAlipaySdk() {
   const cfg = CONFIG.alipay;
-  console.log(`>>> [支付宝] 初始化 SDK: appId=${cfg.appId}, keyType=${cfg.keyType}, gateway=${cfg.gateway}`);
-  try {
-    alipaySdk = new AlipaySdk({
-      appId: cfg.appId,
-      privateKey: cfg.privateKey,
-      alipayPublicKey: cfg.alipayPublicKey,
-      gateway: cfg.gateway,
-      keyType: cfg.keyType || 'PKCS8',
-    });
-    alipaySdkError = null;
-    console.log('>>> [支付宝] SDK 初始化成功');
-    return null;
-  } catch (e) {
-    alipaySdkError = 'SDK 初始化失败: ' + e.message + '。请检查：1) appId 是否正确；2) 私钥格式是否匹配 keyType（PKCS#1 选择 PKCS1，PKCS#8 选择 PKCS8）；3) 支付宝公钥是否正确';
-    console.error('>>> [支付宝] ' + alipaySdkError);
-    return alipaySdkError;
+  // 规范化私钥：确保 PEM 头尾后有换行
+  const rawKey = String(cfg.privateKey || '').trim();
+  const normalizedKey = rawKey
+    .replace(/-----BEGIN [A-Z ]+-----(?!\n)/g, '$&\n')
+    .replace(/(?<!\n)-----END [A-Z ]+-----/g, '\n$&');
+
+  const preferredKeyType = cfg.keyType || 'PKCS8';
+  const altKeyType = preferredKeyType === 'PKCS8' ? 'PKCS1' : 'PKCS8';
+
+  console.log(`>>> [支付宝] 初始化 SDK: appId=${cfg.appId}, keyType=${preferredKeyType}, keyLen=${normalizedKey.length}`);
+
+  let lastError = null;
+  for (const tryKeyType of [preferredKeyType, altKeyType]) {
+    try {
+      alipaySdk = new AlipaySdk({
+        appId: cfg.appId,
+        privateKey: normalizedKey,
+        alipayPublicKey: cfg.alipayPublicKey,
+        gateway: cfg.gateway,
+        keyType: tryKeyType,
+      });
+      alipaySdkError = null;
+      console.log(`>>> [支付宝] ✅ SDK 初始化成功 (keyType=${tryKeyType})`);
+      return null;
+    } catch (e) {
+      lastError = e.message;
+      console.warn(`>>> [支付宝] SDK(keyType=${tryKeyType}) 失败: ${e.message}`);
+      alipaySdk = null;
+    }
   }
+
+  alipaySdkError = 'SDK 初始化失败（PKCS8+PKCS1 均已尝试）: ' + lastError + '。请检查：1) appId 是否正确；2) 私钥格式是否匹配 keyType；3) 支付宝公钥是否正确';
+  console.error('>>> [支付宝] ' + alipaySdkError);
+  return alipaySdkError;
 }
 
 createAlipaySdk();
@@ -1099,7 +1116,10 @@ app.post('/api/config/alipay', express.json(), async (req, res) => {
         trimmedKey = '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----';
       }
     }
-    cfg.privateKey = trimmedKey;
+    // 确保 PEM 头尾后有正确换行
+    cfg.privateKey = trimmedKey
+      .replace(/-----BEGIN [A-Z ]+-----(?!\n)/g, '$&\n')
+      .replace(/(?<!\n)-----END [A-Z ]+-----/g, '\n$&');
   }
 
   // 重新初始化 SDK

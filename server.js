@@ -102,24 +102,56 @@ function getMerchantRuntime(id, merchant) {
     });
   }
 
-  // 当面付：创建 AlipaySdk 实例
+  // 当面付：创建 AlipaySdk 实例（参考黑金PAY收银台模板的简单可靠方式）
   if (merchant.type !== 'uid' && merchant.appId && merchant.privateKey) {
-    try {
-      const keyType = (merchant.keyType === 'PKCS8' || (merchant.privateKey || '').includes('BEGIN PRIVATE KEY')
-        && !(merchant.privateKey || '').includes('BEGIN RSA PRIVATE KEY')) ? 'PKCS8' : 'PKCS1';
-      const privateKeyPreview = (merchant.privateKey || '').substring(0, 30).replace(/\n/g, '\\n');
-      console.log(`[商户:${id}] 尝试初始化 AlipaySdk: appId=${merchant.appId}, keyType=${keyType}, keyPreview=${privateKeyPreview}...`);
-      runtime.alipaySdk = new AlipaySdk({
-        appId: String(merchant.appId),
-        privateKey: merchant.privateKey,
-        alipayPublicKey: merchant.alipayPublicKey || '',
-        gateway: 'https://openapi.alipay.com/gateway.do',
-        keyType,
-      });
-      console.log(`[商户:${id}] AlipaySdk 初始化成功 (keyType=${keyType})`);
-    } catch (e) {
-      console.error(`[商户:${id}] AlipaySdk 初始化失败:`, e.message);
-      runtime.alipaySdkError = `AlipaySdk 初始化失败: ${e.message}。请检查：1) appId 是否正确；2) 私钥格式是否与 keyType 匹配（当前 keyType=${merchant.keyType}）；3) 私钥是否完整。`;
+    // 规范化私钥：确保有正确的换行符（模板依赖 JSON.parse 还原 \n → 真实换行）
+    const rawKey = String(merchant.privateKey).trim();
+    // 确保 PEM 头尾后有换行（alipay-sdk 期望标准 PEM 格式）
+    const normalizedKey = rawKey
+      .replace(/-----BEGIN [A-Z ]+-----(?!\n)/g, '$&\n')
+      .replace(/(?<!\n)-----END [A-Z ]+-----/g, '\n$&');
+    const keyPreview = normalizedKey.substring(0, 40).replace(/\n/g, '\\n');
+    const keyPreviewLen = normalizedKey.length;
+
+    // 使用商户创建时确定的 keyType（默认为 PKCS8，与模板保持一致）
+    const preferredKeyType = merchant.keyType || 'PKCS8';
+    const altKeyType = preferredKeyType === 'PKCS8' ? 'PKCS1' : 'PKCS8';
+
+    let initSuccess = false;
+    let lastError = null;
+
+    // 先按存储的 keyType 初始化（与模板完全一致的参数结构）
+    for (const tryKeyType of [preferredKeyType, altKeyType]) {
+      try {
+        console.log(`[商户:${id}] 尝试 AlipaySdk(keyType=${tryKeyType}): appId=${merchant.appId}, keyLen=${keyPreviewLen}, preview=${keyPreview}...`);
+        runtime.alipaySdk = new AlipaySdk({
+          appId: String(merchant.appId),
+          privateKey: normalizedKey,
+          alipayPublicKey: String(merchant.alipayPublicKey || ''),
+          gateway: 'https://openapi.alipay.com/gateway.do',
+          keyType: tryKeyType,
+        });
+        console.log(`[商户:${id}] ✅ AlipaySdk 初始化成功 (keyType=${tryKeyType})`);
+
+        // 如果实际使用的 keyType 与存储不一致，更新存储
+        if (tryKeyType !== preferredKeyType) {
+          console.log(`[商户:${id}] ⚠️ keyType 已从 ${preferredKeyType} 自动修正为 ${tryKeyType}`);
+          const list = loadMerchants();
+          const m = list.find(x => x.id === id);
+          if (m) { m.keyType = tryKeyType; saveMerchants(list); }
+        }
+        initSuccess = true;
+        break;
+      } catch (e) {
+        lastError = e.message;
+        console.warn(`[商户:${id}] AlipaySdk(keyType=${tryKeyType}) 失败: ${e.message}`);
+        runtime.alipaySdk = null;
+      }
+    }
+
+    if (!initSuccess) {
+      console.error(`[商户:${id}] ❌ AlipaySdk 初始化全部失败 (PKCS8+PKCS1 均报错)`);
+      runtime.alipaySdkError = `AlipaySdk 初始化失败（双格式均已尝试）。错误: ${lastError}。请检查：1) appId="${merchant.appId}" 是否正确；2) 私钥是否完整（长度=${keyPreviewLen}）；3) 支付宝公钥是否匹配。`;
     }
   } else {
     console.log(`[商户:${id}] 跳过 AlipaySdk 初始化: type=${merchant.type}, hasAppId=${!!merchant.appId}, hasPrivateKey=${!!merchant.privateKey}`);
@@ -349,6 +381,11 @@ app.post('/api/merchants', requireAuth, (req, res) => {
     keyType = isPKCS8 ? 'PKCS8' : 'PKCS1';
   }
 
+  // 规范化私钥：确保 PEM 头尾后有正确换行符（alipay-sdk 期望标准 PEM 格式）
+  trimmedKey = trimmedKey
+    .replace(/-----BEGIN [A-Z ]+-----(?!\n)/g, '$&\n')
+    .replace(/(?<!\n)-----END [A-Z ]+-----/g, '\n$&');
+
   const id = genId();
   const fileName = genFileName();
   const now = new Date().toISOString();
@@ -518,6 +555,10 @@ app.put('/api/merchants/:id', requireAuth, (req, res) => {
               : '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
           }
         }
+        // 确保 PEM 头尾后有正确换行
+        trimmedKey = trimmedKey
+          .replace(/-----BEGIN [A-Z ]+-----(?!\n)/g, '$&\n')
+          .replace(/(?<!\n)-----END [A-Z ]+-----/g, '\n$&');
         merchant.privateKey = trimmedKey;
       }
     }
