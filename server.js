@@ -32,8 +32,24 @@ const MERCHANTS_FILE = path.join(DATA_DIR, 'merchants.json');
 
 // ======================== 管理员配置 ========================
 
+const ADMIN_CONFIG_FILE = path.join(DATA_DIR, 'admin.json');
+
+function loadAdminConfig() {
+  try {
+    if (fs.existsSync(ADMIN_CONFIG_FILE)) {
+      const cfg = JSON.parse(fs.readFileSync(ADMIN_CONFIG_FILE, 'utf-8'));
+      return { password: cfg.password || 'yy123456' };
+    }
+  } catch (e) { console.error('读取管理员配置失败:', e.message); }
+  return { password: 'yy123456' };
+}
+
+function saveAdminConfig(cfg) {
+  fs.writeFileSync(ADMIN_CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf-8');
+}
+
+let adminConfig = loadAdminConfig();
 const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'yy123456';
 const adminSessions = new Map();
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 
@@ -324,7 +340,7 @@ function generateUidMerchantZip(config) {
 
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+  if (username === ADMIN_USERNAME && password === adminConfig.password) {
     const token = crypto.randomBytes(16).toString('hex');
     adminSessions.set(token, { createdAt: Date.now(), type: 'admin' });
     return res.json({ code: 'OK', token, message: '登录成功' });
@@ -341,6 +357,24 @@ app.post('/api/admin/check', (req, res) => {
 app.post('/api/admin/logout', (req, res) => {
   adminSessions.delete(cleanToken(req.headers.authorization || req.body.token));
   res.json({ code: 'OK' });
+});
+
+app.post('/api/admin/change-password', requireAuth, (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ code: 'FAIL', message: '请输入原密码和新密码' });
+  }
+  if (oldPassword !== adminConfig.password) {
+    return res.status(400).json({ code: 'FAIL', message: '原密码错误' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ code: 'FAIL', message: '新密码至少6位' });
+  }
+  adminConfig.password = newPassword;
+  saveAdminConfig(adminConfig);
+  // 修改密码后清除所有现有 session，强制重新登录
+  adminSessions.clear();
+  res.json({ code: 'OK', message: '密码已修改，请重新登录' });
 });
 
 app.get('/api/merchants', requireAuth, (req, res) => {

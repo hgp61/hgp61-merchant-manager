@@ -554,7 +554,7 @@
 
 <!-- 顶部导航 -->
 <div class="topbar">
-  <div class="topbar-brand">
+  <div class="topbar-brand" onclick="openAdminPwdModal()" style="cursor:pointer;" title="点击修改管理员密码">
     <div class="topbar-logo">黑</div>
     <div>
       <div class="topbar-title">黑金PAY 商户管理系统</div>
@@ -738,20 +738,38 @@
       <div class="detail-grid" id="detailGrid">
         <!-- 动态填充 -->
       </div>
-      <div class="form-group" style="margin-top:20px;">
-        <label class="form-label">收款后台访问地址</label>
-        <div class="form-hint">部署后填写该商户的收款后台域名，例如 https://xxx.up.railway.app</div>
-        <div class="url-edit-row">
-          <input type="text" class="form-input" id="detailMerchantUrl" placeholder="https://..." style="font-family:inherit;">
-          <button class="btn-submit" onclick="saveMerchantUrl()">保存</button>
-        </div>
-      </div>
     </div>
     <div class="modal-footer">
-      <button class="btn-submit" onclick="deployMerchant()" id="btnDeploy" style="margin-right:10px;">
-        🚀 一键部署
-      </button>
       <button class="btn-cancel" onclick="closeDetailModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 管理员修改密码弹窗 -->
+<div class="modal-overlay" id="adminPwdModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">修改管理员密码</div>
+      <button class="modal-close" onclick="closeAdminPwdModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label form-label-required">原密码</label>
+        <input type="password" class="form-input" id="adminOldPwd" placeholder="请输入当前密码" style="font-family:inherit;">
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-required">新密码</label>
+        <input type="password" class="form-input" id="adminNewPwd" placeholder="请输入新密码（至少6位）" style="font-family:inherit;">
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-required">确认新密码</label>
+        <input type="password" class="form-input" id="adminConfirmPwd" placeholder="再次输入新密码" style="font-family:inherit;">
+      </div>
+      <div id="adminPwdError" style="color:#e74c3c;font-size:13px;margin-top:8px;min-height:20px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeAdminPwdModal()">取消</button>
+      <button class="btn-submit" onclick="submitAdminChangePwd()">确认修改</button>
     </div>
   </div>
 </div>
@@ -1082,10 +1100,7 @@ async function openMerchantDetail(id) {
     let html = `
       <div class="detail-item detail-full">
         <div class="detail-label">商户名称</div>
-        <div class="detail-value" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <input type="text" class="form-input" id="detailMerchantName" value="${escapeHtml(d.merchantName)}" placeholder="请输入商户名称" style="flex:1;min-width:120px;font-family:inherit;" onkeydown="if(event.key==='Enter')saveMerchantName()">
-          <button class="btn-submit" onclick="saveMerchantName()">保存</button>
-        </div>
+        <div class="detail-value">${escapeHtml(d.merchantName)}</div>
       </div>
       <div class="detail-item"><div class="detail-label">进件类型</div><div class="detail-value">${isUid ? 'UID 进件' : '当面付'}</div></div>
       <div class="detail-item"><div class="detail-label">手机号</div><div class="detail-value">${escapeHtml(d.phone || '')}</div></div>
@@ -1353,6 +1368,58 @@ async function adminBypassLogin() {
     }
   } catch (e) {
     err.textContent = '登录失败: ' + e.message;
+  }
+}
+
+// ===== 管理员修改密码 =====
+function openAdminPwdModal() {
+  document.getElementById('adminPwdModal').classList.add('show');
+  document.getElementById('adminOldPwd').value = '';
+  document.getElementById('adminNewPwd').value = '';
+  document.getElementById('adminConfirmPwd').value = '';
+  document.getElementById('adminPwdError').textContent = '';
+  setTimeout(() => document.getElementById('adminOldPwd').focus(), 100);
+}
+
+function closeAdminPwdModal() {
+  document.getElementById('adminPwdModal').classList.remove('show');
+}
+
+async function submitAdminChangePwd() {
+  const oldPwd = document.getElementById('adminOldPwd').value;
+  const newPwd = document.getElementById('adminNewPwd').value;
+  const confirmPwd = document.getElementById('adminConfirmPwd').value;
+  const err = document.getElementById('adminPwdError');
+
+  if (!oldPwd || !newPwd || !confirmPwd) {
+    err.textContent = '请填写所有字段';
+    return;
+  }
+  if (newPwd.length < 6) {
+    err.textContent = '新密码至少6位';
+    return;
+  }
+  if (newPwd !== confirmPwd) {
+    err.textContent = '两次输入的新密码不一致';
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': getToken() },
+      body: JSON.stringify({ oldPassword: oldPwd, newPassword: newPwd })
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      showToast('密码修改成功，请重新登录', 'success');
+      closeAdminPwdModal();
+      setTimeout(() => doLogout(), 1200);
+    } else {
+      err.textContent = json.message || '修改失败';
+    }
+  } catch (e) {
+    err.textContent = '网络错误: ' + e.message;
   }
 }
 
