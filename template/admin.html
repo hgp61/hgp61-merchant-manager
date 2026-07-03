@@ -3833,10 +3833,13 @@ function downloadMerchantQRImage() {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    // ====== 背景 ======
+    // ====== 背景（黑金流光） ======
     var bgGrad = ctx.createLinearGradient(0, 0, w, h);
-    bgGrad.addColorStop(0, '#121008');
-    bgGrad.addColorStop(1, '#161308');
+    bgGrad.addColorStop(0, '#0a0703');    // 左上深黑
+    bgGrad.addColorStop(0.3, '#121008'); // 暗褐过渡
+    bgGrad.addColorStop(0.5, '#1a1508'); // 中间金色光带
+    bgGrad.addColorStop(0.7, '#121008'); // 暗褐过渡
+    bgGrad.addColorStop(1, '#0a0703');   // 右下深黑
     ctx.fillStyle = bgGrad;
     roundRect(ctx, 0, 0, w, h, 64, true, false);
 
