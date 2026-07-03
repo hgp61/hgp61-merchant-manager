@@ -1234,130 +1234,119 @@ app.get('/m/:id/pay/', (req, res) => {
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    background: #070707;
-    color: #d4af37;
+    background: #070707; color: #d4af37;
     display: flex; align-items: center; justify-content: center;
-    min-height: 100vh;
-    text-align: center;
-    flex-direction: column;
-    padding: 24px;
-    -webkit-tap-highlight-color: transparent;
+    min-height: 100vh; text-align: center; flex-direction: column;
+    padding: 24px; -webkit-tap-highlight-color: transparent;
   }
   .card {
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(212,175,55,0.15);
-    border-radius: 20px;
-    padding: 36px 28px 28px;
-    width: 100%;
-    max-width: 340px;
+    border-radius: 20px; padding: 36px 28px 28px;
+    width: 100%; max-width: 340px;
   }
   .logo { font-size: 26px; font-weight: 800; letter-spacing: 6px; margin-bottom: 4px;
     background: linear-gradient(135deg, #f0d77a, #d4af37, #b8860b);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
   .brand { font-size: 11px; color: rgba(212,175,55,0.4); margin-bottom: 24px; letter-spacing: 3px; }
   .amount-label { font-size: 12px; color: rgba(255,255,255,0.25); margin-bottom: 6px; letter-spacing: 1px; }
   .amount { font-size: 48px; font-weight: 900; margin-bottom: 6px;
     background: linear-gradient(135deg, #f0d77a, #d4af37);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
   .memo { font-size: 13px; color: rgba(212,175,55,0.5); margin-bottom: 24px; word-break: break-all; }
   .divider { height:1px; background:rgba(212,175,55,0.1); margin: 20px 0 24px; }
   .pay-btn {
     display: block; width: 100%;
     background: linear-gradient(135deg, #d4af37, #b8860b);
-    color: #070707;
-    border: none; border-radius: 14px;
-    padding: 16px 0;
-    font-size: 18px; font-weight: 800;
-    text-decoration: none;
-    letter-spacing: 3px;
-    cursor: pointer;
-    margin-bottom: 12px;
+    color: #070707; border: none; border-radius: 14px;
+    padding: 16px 0; font-size: 18px; font-weight: 800;
+    text-decoration: none; letter-spacing: 3px;
+    cursor: pointer; margin-bottom: 12px;
     box-shadow: 0 4px 20px rgba(212,175,55,0.25);
     -webkit-tap-highlight-color: transparent;
   }
   .pay-btn:active { opacity: 0.85; transform: scale(0.98); }
   .secondary-btn {
     display: block; width: 100%;
-    background: transparent;
-    color: #d4af37;
+    background: transparent; color: #d4af37;
     border: 1px solid rgba(212,175,55,0.3); border-radius: 14px;
-    padding: 14px 0;
-    font-size: 15px; font-weight: 600;
-    text-decoration: none;
-    letter-spacing: 2px;
-    cursor: pointer;
-    margin-bottom: 8px;
+    padding: 14px 0; font-size: 15px; font-weight: 600;
+    text-decoration: none; letter-spacing: 2px;
+    cursor: pointer; margin-bottom: 8px;
     -webkit-tap-highlight-color: transparent;
   }
   .secondary-btn:active { background: rgba(212,175,55,0.08); }
-  .tip {
-    font-size: 11px; color: rgba(255,255,255,0.18);
-    margin-top: 20px; line-height: 1.8; text-align: left;
-  }
+  .tip { font-size: 11px; color: rgba(255,255,255,0.18); margin-top: 20px; line-height: 1.8; text-align: left; }
   .tip li { list-style: none; padding-left: 12px; position: relative; }
   .tip li::before { content:'●'; position: absolute; left:0; color:rgba(212,175,55,0.3); font-size: 8px; top: 3px; }
+  .hide { display: none !important; }
+  .success-icon { width: 60px; height: 60px; border-radius: 50%; margin: 24px auto 18px;
+    background: linear-gradient(135deg, #52c41a, #389e0d); color: #fff;
+    font-size: 32px; font-weight: 800; line-height: 60px;
+    box-shadow: 0 4px 20px rgba(82,196,26,0.3);
+  }
+  .done-note { font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 24px; line-height: 1.8; }
 </style>
 </head>
 <body>
-  <div class="card">
-    <div class="logo">黑金PAY</div>
-    <div class="brand">HEIJIN PAY</div>
-    <div class="amount-label">向商户收款</div>
-    <div class="amount">¥${amount.toFixed(2)}</div>
-    ${memo ? `<div class="memo">${memo}</div>` : ''}
-    <div class="divider"></div>
-    <!-- 方式一：alipays:// 协议（优先，需用户主动点击） -->
-    <a class="pay-btn" id="btn1" href="${alipaysUrl2}">打开支付宝付款</a>
-    <!-- 方式二：换一个 appId 再试 -->
-    <a class="secondary-btn" id="btn2" href="${alipaysUrl1}">换方式一（备用）</a>
-    <!-- 方式三：ds.alipay.com 中转 -->
-    <a class="secondary-btn" id="btn3" href="${dsUrl}">换方式二（中转）</a>
-    <ul class="tip">
-      <li>点击按钮后，系统将打开支付宝付款</li>
-      <li>金额已锁定，确认无误后输入密码即可</li>
-      <li>若提示风险请点击「仍然支付」继续</li>
-    </ul>
+  <div class="card" id="card">
+    <!-- 支付视图 -->
+    <div id="payView">
+      <div class="logo">黑金PAY</div>
+      <div class="brand">HEIJIN PAY</div>
+      <div class="amount-label">向商户收款</div>
+      <div class="amount">¥${amount.toFixed(2)}</div>
+      ${memo ? '<div class="memo">' + memo + '</div>' : ''}
+      <div class="divider"></div>
+      <a class="pay-btn" id="btn1" href="${alipaysUrl2}">打开支付宝付款</a>
+      <a class="secondary-btn" id="btn2" href="${alipaysUrl1}">换方式一（备用）</a>
+      <a class="secondary-btn" id="btn3" href="${dsUrl}">换方式二（中转）</a>
+      <ul class="tip">
+        <li>点击按钮后，系统将打开支付宝付款</li>
+        <li>金额已锁定，确认无误后输入密码即可</li>
+        <li>若提示风险请点击「仍然支付」继续</li>
+      </ul>
+    </div>
+    <!-- 完成视图 -->
+    <div id="doneView" class="hide">
+      <div class="logo">黑金PAY</div>
+      <div class="brand">HEIJIN PAY</div>
+      <div class="success-icon">✓</div>
+      <div style="font-size:15px;font-weight:700;color:#d4af37;letter-spacing:1px;margin-bottom:8px;">支付完成</div>
+      <div class="amount" style="margin-bottom:20px;">¥${amount.toFixed(2)}</div>
+      <div class="done-note">
+        如已完成付款，请通知商户确认到账<br>
+        <span style="color:rgba(212,175,55,0.4)">●</span> 点击左上角返回商家页面<br>
+        <span style="color:rgba(212,175,55,0.4)">●</span> 或关闭当前页面
+      </div>
+    </div>
   </div>
 <script>
-  (function() {
-    // 尝试自动拉起（部分浏览器允许非用户触发）
-    var alipaysUrl = '${alipaysUrl2}';
-    setTimeout(function() {
-      // 用 hidden iframe 尝试，不阻塞页面渲染
-      var ifr = document.createElement('iframe');
-      ifr.style.display = 'none';
-      ifr.src = alipaysUrl;
-      document.body.appendChild(ifr);
-      // 同时尝试 location（可能被拦，不影响页面）
-      try { window.location.href = alipaysUrl; } catch(e) {}
-    }, 100);
+(function() {
+  var alipaysUrl = '${alipaysUrl2}';
+  // 自动尝试拉起（部分浏览器允许非用户触发）
+  setTimeout(function() {
+    var ifr = document.createElement('iframe');
+    ifr.style.display = 'none';
+    ifr.src = alipaysUrl;
+    document.body.appendChild(ifr);
+    try { window.location.href = alipaysUrl; } catch(e) {}
+  }, 100);
 
-    // 监听从支付宝返回
-    var hasHidden = false;
-    document.addEventListener('visibilitychange', function() {
-      if (document.visibilityState === 'hidden') {
-        hasHidden = true;
-      } else if (hasHidden) {
-        document.title = '黑金PAY · 支付完成';
-        document.querySelector('.card').innerHTML = `
-          <div class="logo">黑金PAY</div>
-          <div class="brand">HEIJIN PAY</div>
-          <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;font-size:32px;font-weight:800;line-height:60px;margin:24px auto 18px;box-shadow:0 4px 20px rgba(82,196,26,0.3);">✓</div>
-          <div style="font-size:15px;font-weight:700;color:#d4af37;letter-spacing:1px;margin-bottom:8px;">支付完成</div>
-          <div style="font-size:44px;font-weight:900;margin-bottom:20px;background:linear-gradient(135deg,#f0d77a,#d4af37);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">¥${amount.toFixed(2)}</div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.3);line-height:1.8;">
-            如已完成付款，请通知商户确认到账<br>
-            <span style="color:rgba(212,175,55,0.4)">●</span> 点击左上角返回商家页面<br>
-            <span style="color:rgba(212,175,55,0.4)">●</span> 或关闭当前页面
-          </div>
-        `;
-      }
-    });
-  })();
+  // 监听从支付宝返回
+  var hasHidden = false;
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') {
+      hasHidden = true;
+    } else if (hasHidden) {
+      document.title = '黑金PAY · 支付完成';
+      document.getElementById('payView').classList.add('hide');
+      document.getElementById('doneView').classList.remove('hide');
+    }
+  });
+})();
 </script>
 </body>
 </html>`);
