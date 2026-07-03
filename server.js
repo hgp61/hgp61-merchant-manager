@@ -642,9 +642,9 @@ app.get('/m/:id/pay/', (req, res, next) => {
 });
 
 function handleAlipayRedirect(req, res, next) {
-  const ua = (req.headers['user-agent'] || '').toLowerCase();
-  // 支付宝内置浏览器（AlipayClient）或支付宝相关 UA
-  if (ua.includes('alipayclient') || ua.includes('alipay')) {
+  const ua = (req.get('User-Agent') || '').toLowerCase();
+  // 支付宝内置浏览器 UA 包含 AlipayClient / AlipayDefined / AliApp(Alipay)
+  if (/alipayclient|alipaydefined|aliapp/i.test(ua)) {
     const m = req.merchant;
     if (m.type !== 'uid') return next();
     const amount = parseFloat(req.query.amount) || 0;
