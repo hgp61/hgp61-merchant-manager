@@ -1097,6 +1097,7 @@
 // ==================== 配置 ====================
 const API_BASE = '';
 let IS_SIMPLE = false; // 是否为 UID 简易支付模式（页面加载后通过 api/config 获取）
+let MERCHANT_UID = ''; // 商户支付宝 UID（从 api/config 获取）
 
 // ==================== 状态 ====================
 let currentOutTradeNo = '';
@@ -1122,13 +1123,15 @@ function setPayButtonText() {
   }
 }
 
-// 初始化：获取商户类型
+// 初始化：获取商户类型和 UID
 async function initPayButton() {
   try {
     const res = await fetch('api/config');
     const json = await res.json();
-    if (json.code === 'OK' && json.data && json.data.type === 'uid-simple') {
-      IS_SIMPLE = true;
+    if (json.code === 'OK' && json.data) {
+      const d = json.data;
+      IS_SIMPLE = d.type === 'uid-simple';
+      MERCHANT_UID = d.uid || '';
     }
   } catch (e) {}
   setPayButtonText();
@@ -1216,6 +1219,25 @@ async function createQRCode() {
 
   lastAmount = amount;
   lastSubject = subject;
+
+  // UID 简易支付：在 fetch 之前同步跳转支付宝，避免浏览器拦截异步协议跳转
+  if (IS_SIMPLE && MERCHANT_UID) {
+    const bizData = JSON.stringify({ s: 'money', u: MERCHANT_UID, a: parseFloat(amount).toFixed(2), m: subject });
+    const alipayUrl = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(bizData)}`;
+    // 同步跳转（必须在用户点击事件的同步路径中执行）
+    window.location.href = alipayUrl;
+    // 同时异步创建订单（后台记录，不影响用户跳转）
+    fetch(`${API_BASE}cashier/qrcode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount, subject, base_url: window.location.origin })
+    }).then(res => res.json()).then(data => {
+      if (data.code === 'OK') {
+        currentOutTradeNo = data.out_trade_no;
+      }
+    }).catch(() => {});
+    return;
+  }
 
   try {
     const res = await fetch(`${API_BASE}cashier/qrcode`, {

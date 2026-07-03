@@ -800,7 +800,7 @@ function handleAlipayRedirect(req, res, next) {
   // 支付宝内置浏览器 UA 包含 AlipayClient / AlipayDefined / AliApp(Alipay)
   if (/alipayclient|alipaydefined|aliapp/i.test(ua)) {
     const m = req.merchant;
-    if (m.type !== 'uid') return next();
+    if (m.type !== 'uid' && m.type !== 'uid-simple') return next();
     const amount = parseFloat(req.query.amount) || 0;
     const memo = req.query.memo || '';
     const uid = req.query.uid || m.alipayUid;
@@ -1434,7 +1434,7 @@ app.get('/m/:id/api/network-info', (req, res) => {
 app.get('/m/:id/api/config', (req, res) => {
   const m = req.merchant;
   const uidMasked = m.alipayUid ? m.alipayUid.slice(0, 4) + '****' + m.alipayUid.slice(-4) : '未配置';
-  res.json({ code: 'OK', data: { alipayUid: uidMasked, hasUid: !!m.alipayUid, hasPaymentApi: false, merchantName: m.merchantName || '未配置', type: m.type || 'face' } });
+  res.json({ code: 'OK', data: { alipayUid: uidMasked, hasUid: !!m.alipayUid, hasPaymentApi: false, merchantName: m.merchantName || '未配置', type: m.type || 'face', uid: m.alipayUid || '' } });
 });
 
 // ======================== 启动服务 ========================

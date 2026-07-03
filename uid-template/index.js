@@ -1362,6 +1362,7 @@ app.get('/api/config', (req, res) => {
       hasPaymentApi: !!CONFIG.paymentApi,
       merchantName: CONFIG.merchantName || '未配置',
       type: CONFIG.type || 'uid',
+      uid: CONFIG.alipayUid || '',
     },
   });
 });
