@@ -16,12 +16,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 .hr{height:1px;background:rgba(212,175,55,0.1);margin:20px 0 24px}
 .btn{display:block;width:100%;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;border-radius:14px;padding:16px 0;font-size:18px;font-weight:800;text-decoration:none;letter-spacing:3px;cursor:pointer;margin-bottom:12px;box-shadow:0 4px 20px rgba(212,175,55,0.25);-webkit-tap-highlight-color:transparent}
 .btn:active{opacity:0.85;transform:scale(0.98)}
-.btn2{display:block;width:100%;background:transparent;color:#d4af37;border:1px solid rgba(212,175,55,0.3);border-radius:14px;padding:14px 0;font-size:15px;font-weight:600;text-decoration:none;letter-spacing:2px;cursor:pointer;margin-bottom:8px;-webkit-tap-highlight-color:transparent}
-.uid-section{margin-top:20px;padding:16px;background:rgba(212,175,55,0.05);border-radius:12px;border:1px solid rgba(212,175,55,0.1);display:none}
-.uid-section.show{display:block}
-.uid-label{font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:8px}
-.uid-value{font-size:18px;font-weight:800;color:#fff;letter-spacing:2px;margin-bottom:12px;word-break:break-all}
-.copy-btn{display:inline-block;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.steps{margin-top:20px;text-align:left;font-size:13px;color:rgba(255,255,255,0.5);line-height:2.2}
+.steps-num{display:inline-block;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;font-size:12px;font-weight:800;text-align:center;line-height:22px;margin-right:8px;vertical-align:middle}
 .hide{display:none!important}
 .done{display:none;text-align:center}
 .done.show{display:block}
@@ -38,13 +34,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     <div class="amt" id="amount">¥0.00</div>
     <div class="memo" id="memo" style="display:none"></div>
     <div class="hr"></div>
-    <a class="btn" id="btn1" href="#">打开支付宝付款</a>
-    <a class="btn2" id="btn2" href="#" style="display:none">用 H5 链接付款</a>
-    <div class="uid-section" id="uidSection">
-      <div class="uid-label">若以上方式均无效，请复制 UID 手动转账</div>
-      <div class="uid-value" id="uidValue"></div>
-      <button class="copy-btn" id="copyBtn">复制 UID</button>
+    <a class="btn" id="btnOpen" href="#">打开支付宝</a>
+    <div class="steps">
+      <div><span class="steps-num">1</span> 点击上方按钮打开支付宝</div>
+      <div><span class="steps-num">2</span> 支付宝打开后，回到浏览器</div>
+      <div><span class="steps-num">3</span> 点击「复制收款信息」</div>
+      <div><span class="steps-num">4</span> 打开支付宝 → 转账 → 粘贴信息</div>
     </div>
+    <a class="btn" id="btnCopy" style="background:transparent;color:#d4af37;border:1px solid rgba(212,175,55,0.3);margin-top:16px;letter-spacing:2px;font-size:15px">复制收款信息</a>
   </div>
   <div id="doneView" class="done">
     <div class="logo">黑金PAY</div>
@@ -64,66 +61,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 
   document.getElementById('amount').textContent = '¥' + parseFloat(amount).toFixed(2);
   document.getElementById('amount2').textContent = '¥' + parseFloat(amount).toFixed(2);
-  document.getElementById('uidValue').textContent = uid;
 
   if(memo){
     document.getElementById('memo').textContent = memo;
     document.getElementById('memo').style.display = 'block';
   }
 
-  // 构造 alipays:// 链接（支付宝内置浏览器用这个）
-  var biz = JSON.stringify({ s:'money', u:uid, a:parseFloat(amount).toFixed(2), m:memo });
-  var ebiz = encodeURIComponent(biz);
-  var alipaysUrl = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz;
+  // 构造收款信息文本
+  var infoText = '支付宝UID：' + uid + '\n金额：¥' + parseFloat(amount).toFixed(2) + (memo ? '\n备注：' + memo : '');
 
-  // 构造 H5 中转链接（部分外部浏览器点这个能跳到支付宝）
-  // ds.alipay.com 是支付宝的 H5 中转页，会在支付宝 App 内打开
-  var dsUrl = 'https://ds.alipay.com/?appId=20000123&actionType=scan&biz_data=' + ebiz;
-
-  // 显示 H5 链接按钮（Android 显示，iOS 不显示因为 ds.alipay.com 在 iOS 上效果不好）
-  if (/android/i.test(navigator.userAgent)) {
-    document.getElementById('btn2').style.display = 'block';
-    document.getElementById('btn2').href = dsUrl;
-  }
-
-  // 主按钮：尝试唤起支付宝
-  document.getElementById('btn1').addEventListener('click', function(e) {
+  // 按钮1：唤起支付宝（点击后页面会隐藏，用户再切回来）
+  document.getElementById('btnOpen').addEventListener('click', function(e) {
     e.preventDefault();
-    var ua = navigator.userAgent;
-
-    // 先尝试用 alipays:// 唤起
-    if (/android/i.test(ua)) {
-      // Android: 用 intent 协议，指定支付宝包名
-      var intentUrl = 'intent://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz + '#Intent;scheme=alipays;package=com.eg.android.AlipayGphone;end';
-      location.href = intentUrl;
-      // 备用：直接 alipays://
-      setTimeout(function() { location.href = alipaysUrl; }, 300);
-    } else {
-      // iOS: 直接 alipays://
-      location.href = alipaysUrl;
-    }
-
-    // 2 秒后如果页面还在，显示 UID 备用方案
-    setTimeout(function() {
-      if (document.visibilityState === 'visible') {
-        document.getElementById('uidSection').classList.add('show');
-      }
-    }, 2000);
+    // 尝试唤起支付宝
+    var biz = JSON.stringify({ s:'money', u:uid, a:parseFloat(amount).toFixed(2), m:memo });
+    var ebiz = encodeURIComponent(biz);
+    var alipaysUrl = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz;
+    location.href = alipaysUrl;
   });
 
-  // 复制 UID
-  document.getElementById('copyBtn').addEventListener('click', function() {
-    var text = '支付宝UID：' + uid + '，金额：¥' + parseFloat(amount).toFixed(2) + (memo ? '，备注：' + memo : '');
+  // 按钮2：复制收款信息
+  document.getElementById('btnCopy').addEventListener('click', function() {
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(function() { alert('已复制收款信息'); });
+      navigator.clipboard.writeText(infoText).then(function() { alert('收款信息已复制\n\n' + infoText); });
     } else {
       var ta = document.createElement('textarea');
-      ta.value = text;
+      ta.value = infoText;
       document.body.appendChild(ta);
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      alert('已复制收款信息');
+      alert('收款信息已复制\n\n' + infoText);
     }
   });
 
