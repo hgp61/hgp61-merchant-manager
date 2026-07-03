@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>黑金PAY · 确认支付</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#070707;color:#d4af37;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;flex-direction:column;padding:24px;-webkit-tap-highlight-color:transparent}
+.card{background:rgba(255,255,255,0.03);border:1px solid rgba(212,175,55,0.15);border-radius:20px;padding:36px 28px 28px;width:100%;max-width:340px}
+.logo{font-size:26px;font-weight:800;letter-spacing:6px;margin-bottom:4px;background:linear-gradient(135deg,#f0d77a,#d4af37,#b8860b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.brand{font-size:11px;color:rgba(212,175,55,0.4);margin-bottom:24px;letter-spacing:3px}
+.al{font-size:12px;color:rgba(255,255,255,0.25);margin-bottom:6px;letter-spacing:1px}
+.amt{font-size:48px;font-weight:900;margin-bottom:6px;background:linear-gradient(135deg,#f0d77a,#d4af37);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.memo{font-size:13px;color:rgba(212,175,55,0.5);margin-bottom:24px;word-break:break-all}
+.hr{height:1px;background:rgba(212,175,55,0.1);margin:20px 0 24px}
+.btn{display:block;width:100%;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;border-radius:14px;padding:16px 0;font-size:18px;font-weight:800;text-decoration:none;letter-spacing:3px;cursor:pointer;margin-bottom:12px;box-shadow:0 4px 20px rgba(212,175,55,0.25);-webkit-tap-highlight-color:transparent}
+.btn:active{opacity:0.85;transform:scale(0.98)}
+.btn2{display:block;width:100%;background:transparent;color:#d4af37;border:1px solid rgba(212,175,55,0.3);border-radius:14px;padding:14px 0;font-size:15px;font-weight:600;text-decoration:none;letter-spacing:2px;cursor:pointer;margin-bottom:8px;-webkit-tap-highlight-color:transparent}
+.tip{font-size:11px;color:rgba(255,255,255,0.18);margin-top:20px;line-height:1.8;text-align:left}
+.tip li{list-style:none;padding-left:14px;position:relative}
+.tip li:before{content:"●";position:absolute;left:0;color:rgba(212,175,55,0.3);font-size:8px;top:3px}
+.hide{display:none!important}
+.done{display:none;text-align:center}
+.done.show{display:block}
+.si{width:60px;height:60px;border-radius:50%;margin:24px auto 18px;background:linear-gradient(135deg,#52c41a,#389e0d);color:#fff;font-size:32px;font-weight:800;line-height:60px;box-shadow:0 4px 20px rgba(82,196,26,0.3)}
+.dn{font-size:12px;color:rgba(255,255,255,0.3);margin-top:24px;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="payView">
+    <div class="logo">黑金PAY</div>
+    <div class="brand">HEIJIN PAY</div>
+    <div class="al">向商户收款</div>
+    <div class="amt" id="amount">¥0.00</div>
+    <div class="memo" id="memo" style="display:none"></div>
+    <div class="hr"></div>
+    <a class="btn" id="btn1" href="#">打开支付宝付款</a>
+    <a class="btn2" id="btn2" href="#">换方式（备用）</a>
+    <ul class="tip">
+      <li>点击按钮后，系统将打开支付宝付款</li>
+      <li>金额已锁定，确认无误后输入密码即可</li>
+      <li>若提示风险请点击「仍然支付」继续</li>
+    </ul>
+  </div>
+  <div id="doneView" class="done">
+    <div class="logo">黑金PAY</div>
+    <div class="brand">HEIJIN PAY</div>
+    <div class="si">✓</div>
+    <div style="font-size:15px;font-weight:700;color:#d4af37;letter-spacing:1px;margin-bottom:8px">支付完成</div>
+    <div class="amt" id="amount2">¥0.00</div>
+    <div class="dn">如已完成付款，请通知商户确认到账<br>● 点击左上角返回商家页面<br>● 或关闭当前页面</div>
+  </div>
+</div>
+<script>
+(function(){
+  // 从 URL 读取参数
+  var params = new URLSearchParams(location.search);
+  var amount = params.get('amount') || '0';
+  var memo = params.get('memo') || '';
+  var uid = params.get('uid') || '';
+
+  // 显示金额
+  document.getElementById('amount').textContent = '¥' + parseFloat(amount).toFixed(2);
+  document.getElementById('amount2').textContent = '¥' + parseFloat(amount).toFixed(2);
+
+  // 显示备注
+  if(memo){
+    document.getElementById('memo').textContent = memo;
+    document.getElementById('memo').style.display = 'block';
+  }
+
+  // 构造 alipays:// 链接
+  var biz = JSON.stringify({ s:'money', u:uid, a:parseFloat(amount).toFixed(2), m:memo });
+  var ebiz = encodeURIComponent(biz);
+  var url1 = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz;
+  var url2 = 'alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=' + ebiz;
+
+  document.getElementById('btn1').href = url1;
+  document.getElementById('btn2').href = url2;
+
+  // 监听从支付宝返回
+  var hasHidden = false;
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'hidden'){ hasHidden = true; }
+    else if(hasHidden){
+      document.title = '黑金PAY · 支付完成';
+      document.getElementById('payView').classList.add('hide');
+      document.getElementById('doneView').classList.add('show');
+    }
+  });
+})();
+</script>
+</body>
+</html>
