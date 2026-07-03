@@ -1233,7 +1233,23 @@ async function createQRCode() {
       // UID 简易支付: 直接跳转支付宝转账页面
       if (data.use_direct_redirect) {
         currentOutTradeNo = data.out_trade_no;
+        // 方式1: 直接跳转
         window.location.href = data.qr_code;
+        // 方式2: 创建 a 标签点击触发（某些浏览器需要用户交互触发）
+        const a = document.createElement('a');
+        a.href = data.qr_code;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        // 2秒后如果页面还在（跳转被拦截），恢复按钮并提示
+        setTimeout(() => {
+          if (document.visibilityState !== 'hidden') {
+            showError('支付宝未自动打开，请确保已安装支付宝应用');
+            payBtn.disabled = false;
+            setPayButtonText();
+          }
+        }, 2000);
         return;
       }
       currentOutTradeNo = data.out_trade_no;
