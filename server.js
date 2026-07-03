@@ -1211,95 +1211,106 @@ app.get('/m/:id/pay/', (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>黑金PAY · 正在打开支付宝</title>
+<title>黑金PAY · 确认转账</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    background: #070707; color: #d4af37; display: flex; align-items: center; justify-content: center;
-    min-height: 100vh; text-align: center; flex-direction: column; padding: 24px;
+    background: #070707; color: #d4af37; min-height: 100vh; padding: 20px;
   }
-  .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(212,175,55,0.15); border-radius: 20px; padding: 36px 28px; width: 100%; max-width: 340px; }
-  .logo { font-size: 26px; font-weight: 800; letter-spacing: 6px; margin-bottom: 4px; background: linear-gradient(135deg, #f0d77a, #d4af37, #b8860b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  .brand { font-size: 11px; color: rgba(212,175,55,0.4); margin-bottom: 28px; letter-spacing: 3px; }
-  .amount-label { font-size: 12px; color: rgba(255,255,255,0.25); margin-bottom: 6px; }
-  .amount { font-size: 44px; font-weight: 900; margin-bottom: 4px; background: linear-gradient(135deg, #f0d77a, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  .memo { font-size: 13px; color: rgba(212,175,55,0.5); margin-bottom: 28px; word-break: break-all; }
-  .spinner { width: 40px; height: 40px; border: 3px solid rgba(212,175,55,0.2); border-top-color: #d4af37; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 18px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .status-text { font-size: 15px; font-weight: 700; color: #d4af37; margin-bottom: 8px; }
-  .status-sub { font-size: 12px; color: rgba(255,255,255,0.3); line-height: 1.6; }
-  .pay-btn { display:none; width:100%; background: linear-gradient(135deg, #d4af37, #b8860b); color: #070707; border:none; border-radius:14px; padding:16px 0; font-size:17px; font-weight:800; text-decoration:none; letter-spacing:3px; cursor:pointer; margin-top:20px; box-shadow:0 4px 20px rgba(212,175,55,0.25); }
-  .pay-btn.show { display:block; }
-  .success-view { display:none; }
-  .success-view.show { display:block; }
-  .jump-view.hide { display:none; }
-  .success-icon { width:60px; height:60px; border-radius:50%; background:linear-gradient(135deg, #52c41a, #389e0d); color:#fff; font-size:32px; font-weight:800; line-height:60px; margin:0 auto 18px; box-shadow:0 4px 20px rgba(82,196,26,0.3); }
+  .header { text-align:center; padding:20px 0 10px; }
+  .logo { font-size: 22px; font-weight: 800; letter-spacing: 5px; background: linear-gradient(135deg, #f0d77a, #d4af37, #b8860b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .brand { font-size: 10px; color: rgba(212,175,55,0.35); letter-spacing: 2px; margin-top: 2px; }
+  .card {
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(212,175,55,0.15);
+    border-radius: 20px; padding: 28px 20px; max-width: 360px; margin: 20px auto;
+  }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid rgba(212,175,55,0.08); }
+  .row:last-child { border-bottom:none; }
+  .row-label { font-size:13px; color:rgba(255,255,255,0.4); }
+  .row-value { font-size:15px; font-weight:700; color:#d4af37; word-break:break-all; text-align:right; max-width:60%; }
+  .amount-row { padding:20px 0; text-align:center; }
+  .amount-label { font-size:12px; color:rgba(255,255,255,0.3); margin-bottom:4px; }
+  .amount { font-size:48px; font-weight:900; background:linear-gradient(135deg,#f0d77a,#d4af37); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .btn-wrap { padding:24px 0 0; }
+  .btn {
+    display:block; width:100%; background:linear-gradient(135deg,#d4af37,#b8860b); color:#070707;
+    border:none; border-radius:14px; padding:18px 0; font-size:17px; font-weight:800;
+    text-align:center; text-decoration:none; letter-spacing:3px; cursor:pointer;
+    box-shadow:0 4px 24px rgba(212,175,55,0.3); transition:all 0.2s;
+  }
+  .btn:active { transform:scale(0.97); box-shadow:0 2px 12px rgba(212,175,55,0.2); }
+  .tip { text-align:center; font-size:11px; color:rgba(255,255,255,0.2); margin-top:16px; line-height:1.6; }
 </style>
 </head>
 <body>
+<div class="header">
+  <div class="logo">黑金PAY</div>
+  <div class="brand">HEIJIN PAY</div>
+</div>
 <div class="card">
-  <div class="jump-view" id="jumpView">
-    <div class="logo">黑金PAY</div>
-    <div class="brand">HEIJIN PAY</div>
-    <div class="amount-label">支付金额</div>
+  <div class="amount-row">
+    <div class="amount-label">转账金额</div>
     <div class="amount">¥${amount.toFixed(2)}</div>
-    ${memo ? `<div class="memo">${memo}</div>` : ''}
-    <div class="spinner" id="spinner"></div>
-    <div class="status-text" id="statusText">正在打开支付宝...</div>
-    <div class="status-sub" id="statusSub">请稍候，系统正在为您跳转</div>
-    <a class="pay-btn" id="payBtn">打开支付宝</a>
   </div>
-  <div class="success-view" id="successView">
-    <div class="success-icon">✓</div>
-    <div class="status-text">支付完成</div>
-    <div class="amount" style="margin-top:12px;margin-bottom:20px;">¥${amount.toFixed(2)}</div>
-    <div class="status-sub">如已完成付款，请通知商户确认到账</div>
+  <div class="row">
+    <span class="row-label">收款方</span>
+    <span class="row-value" id="uidDisplay">${uid}</span>
+  </div>
+  ${memo ? `<div class="row"><span class="row-label">备注</span><span class="row-value">${memo}</span></div>` : ''}
+  <div class="btn-wrap">
+    <a class="btn" id="payBtn" href="#">打开支付宝转账</a>
   </div>
 </div>
+<div class="tip">点击上方按钮将在支付宝中打开转账页面<br>转账完成后请通知商户确认到账</div>
 <script>
 (function(){
+  var uid = ${JSON.stringify(uid)};
+  var amt = ${amount.toFixed(2)};
+  var memo = ${JSON.stringify(memo || '')};
+
+  // 支付宝内浏览器：直接用 alipays:// 协议
+  // 支付宝内识别 appId=09999988（转账）或 appId=20000123（扫码/付款）
+  // 最可靠的方案：用 AlipayJSBridge 调起转账
   var isInAlipay = /AlipayClient|AliApp/i.test(navigator.userAgent);
-  var alipayTransferUrl = ${JSON.stringify(alipayTransferUrl)};
-  var dsUrl = ${JSON.stringify(dsUrl)};
-  var targetUrl = isInAlipay ? alipayTransferUrl : dsUrl;
-  var payBtn = document.getElementById('payBtn');
 
-  function showSuccess(){
-    document.getElementById('jumpView').classList.add('hide');
-    document.getElementById('successView').classList.add('show');
-    document.title = '黑金PAY · 支付完成';
+  function doTransfer(){
+    if(isInAlipay && window.AlipayJSBridge){
+      // 支付宝内 + JSBridge 可用：最可靠
+      window.AlipayJSBridge.call('tradePay', {
+        tradeNO: '',
+        partner: uid,
+        bizType: 'transfer',
+        amount: amt,
+        memo: memo
+      }, function(result){});
+    } else if(isInAlipay) {
+      // 支付宝内但 JSBridge 未就绪：等待 JSBridge
+      document.addEventListener('AlipayJSBridgeReady', function(){
+        AlipayJSBridge.call('tradePay', {
+          tradeNO: '',
+          partner: uid,
+          bizType: 'transfer',
+          amount: amt,
+          memo: memo
+        }, function(result){});
+      });
+    } else {
+      // 外部浏览器：用 ds.alipay.com 中转
+      location.href = 'https://ds.alipay.com/?scheme=' + encodeURIComponent('alipays://platformapi/startapp?appId=09999988&actionType=toAccount&goBack=NO&userId=' + encodeURIComponent(uid) + '&amount=' + amt + '&memo=' + encodeURIComponent(memo || ''));
+    }
   }
 
-  function showBtn(){
-    document.getElementById('spinner').style.display='none';
-    document.getElementById('statusText').textContent='请点击按钮打开支付宝';
-    document.getElementById('statusSub').textContent='如未自动跳转，请手动点击';
-    payBtn.href = targetUrl;
-    payBtn.textContent = '打开支付宝';
-    payBtn.classList.add('show');
-  }
-
-  payBtn.addEventListener('click', function(e){ e.preventDefault(); location.href = targetUrl; });
-
-  var hiddenOnce = false;
-  document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState === 'hidden'){ hiddenOnce = true; }
-    else if(hiddenOnce){ showSuccess(); }
+  // 按钮点击触发转账
+  document.getElementById('payBtn').addEventListener('click', function(e){
+    e.preventDefault();
+    doTransfer();
   });
 
-  // 立即尝试跳转
-  location.href = targetUrl;
-
-  // 800ms 后如果还在当前页，显示手动按钮
-  setTimeout(function(){
-    if(document.visibilityState === 'visible' && !hiddenOnce){ showBtn(); }
-  }, 800);
-
-  // 3000ms 后再次尝试跳转（防止第一次失败）
-  setTimeout(function(){
-    if(document.visibilityState === 'visible' && !hiddenOnce){ location.href = targetUrl; }
-  }, 3000);
+  // 页面加载后自动尝试（仅外部浏览器）
+  if(!isInAlipay){
+    setTimeout(doTransfer, 300);
+  }
 })();
 </script>
 </body>
