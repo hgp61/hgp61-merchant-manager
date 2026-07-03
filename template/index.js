@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
-const { AlipaySdk } = require('alipay-sdk');
+const AlipaySdk = require('alipay-sdk').default || require('alipay-sdk');
 const QRCode = require('qrcode');
 
 // PostgreSQL 支持（Railway 部署时通过 DATABASE_URL 自动启用）

@@ -13,7 +13,7 @@ const http = require('http');
 const https = require('https');
 const os = require('os');
 const AdmZip = require('adm-zip');
-const { AlipaySdk } = require('alipay-sdk');
+const AlipaySdk = require('alipay-sdk').default || require('alipay-sdk');
 const QRCode = require('qrcode');
 
 const app = express();
