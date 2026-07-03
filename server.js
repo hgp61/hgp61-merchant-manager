@@ -1429,7 +1429,7 @@ app.listen(PORT, () => {
   console.log('========================================');
   console.log('  黑金PAY 商户管理系统（统一端口）');
   console.log(`  管理端: http://localhost:${PORT}`);
-  console.log(`  默认管理员: ${ADMIN_USERNAME} / ${ADMIN_PASSWORD}`);
+  console.log(`  默认管理员: ${ADMIN_USERNAME} / ${adminConfig.password}`);
   console.log('========================================');
   console.log('');
   console.log('  商户入口（例）:');
