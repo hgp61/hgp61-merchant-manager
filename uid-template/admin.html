@@ -3769,7 +3769,7 @@ function renderMerchantQRCode() {
   if (_merchantQrInstance) { try { _merchantQrInstance.clear(); } catch(e){} _merchantQrInstance = null; }
   box.innerHTML = '';  // 清空容器
 
-  var cashierUrl = window.location.origin.replace(/\/$/, '') + '/cashier.html';
+  var cashierUrl = window.location.href.replace(/admin\.html$/, 'cashier.html');
 
   // qrcodejs API：直接在容器内创建
   _merchantQrInstance = new QRCode(box, {
