@@ -1200,14 +1200,37 @@ async function createQRCode() {
   // ===== UID 简易支付：在 await 之前同步跳转，确保在用户手势同步路径中执行 =====
   if (IS_SIMPLE && MERCHANT_UID) {
     const bizData = JSON.stringify({ s: 'money', u: MERCHANT_UID, a: parseFloat(amount).toFixed(2), m: subject });
-    const alipayUrl = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(bizData)}`;
+    const alipayScheme = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(bizData)}`;
+
+    // 检测是否在支付宝内置浏览器中
+    const isAlipayBrowser = /Alipay/i.test(navigator.userAgent);
 
     const payBtn = document.getElementById('payBtn');
     payBtn.disabled = true;
     payBtn.textContent = '跳转中...';
 
-    // 关键：必须在用户点击事件的同步路径中执行，不能被 await 中断
-    window.location.href = alipayUrl;
+    if (isAlipayBrowser) {
+      // 在支付宝内置浏览器中，直接使用 https 的支付宝 URL 让支付宝内部路由
+      // 使用 ds.alipay.com 作为 scheme 中转，支付宝内置浏览器会拦截并内部路由
+      const encodedScheme = encodeURIComponent(alipayScheme);
+      window.location.href = `https://ds.alipay.com/?scheme=${encodedScheme}`;
+    } else {
+      // 在其他浏览器中，直接使用 alipays:// 协议唤起支付宝 App
+      window.location.href = alipayScheme;
+      // 同时尝试 iframe 方式（某些浏览器需要）
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = alipayScheme;
+      document.body.appendChild(iframe);
+      setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 3000);
+      // 同时尝试 a 标签点击方式
+      const a = document.createElement('a');
+      a.href = alipayScheme;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { if (a.parentNode) a.parentNode.removeChild(a); }, 100);
+    }
 
     // 异步创建订单（后台记录，不阻塞跳转）
     fetch(`${API_BASE}cashier/qrcode`, {
