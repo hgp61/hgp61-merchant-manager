@@ -800,6 +800,20 @@ app.post('/m/:id/api/login', express.json(), (req, res) => {
     return res.status(400).json({ code: 'FAIL', message: '手机号或密码错误' });
   }
 
+  // 先检查是否已通过安全设置修改过密码
+  const storedPwd = rt.security.merchantPassword || '';
+  if (storedPwd && storedPwd !== 'yy123456') {
+    // 已修改过密码，严格校验修改后的密码
+    const hashFn = m.type === 'uid' ? hashMerchantPwdUid : hashMerchantPwd;
+    if (password === storedPwd || hashFn(password) === hashFn(storedPwd)) {
+      const token = crypto.randomBytes(16).toString('hex');
+      rt.sessions.set(token, { createdAt: Date.now(), phone: phone.trim() });
+      return res.json({ code: 'OK', token, message: '登录成功' });
+    }
+    return res.status(400).json({ code: 'FAIL', message: '手机号或密码错误' });
+  }
+
+  // 尚未修改过密码，接受默认密码 yy123456
   if (password === 'yy123456') {
     const token = crypto.randomBytes(16).toString('hex');
     rt.sessions.set(token, { createdAt: Date.now(), phone: phone.trim() });
@@ -838,8 +852,10 @@ app.post('/m/:id/api/login/change-password', express.json(), (req, res) => {
   if (!newPassword || newPassword.length < 6) return res.status(400).json({ code: 'FAIL', message: '新密码长度不能少于6位' });
   if (newPassword !== confirmPassword) return res.status(400).json({ code: 'FAIL', message: '两次输入的新密码不一致' });
 
-  // 简化：接受原密码为 yy123456
-  if (oldPassword !== 'yy123456') {
+  // 验证原密码：取已持久化的密码，回退到默认 yy123456
+  const storedPwd = req.runtime.security.merchantPassword || 'yy123456';
+  const hashFn = req.merchant.type === 'uid' ? hashMerchantPwdUid : hashMerchantPwd;
+  if (oldPassword !== storedPwd && hashFn(oldPassword) !== hashFn(storedPwd)) {
     return res.status(400).json({ code: 'FAIL', message: '原密码错误' });
   }
 

@@ -906,28 +906,24 @@ app.post('/api/login', express.json(), (req, res) => {
 
   // 验证手机号和密码
   const configPhone = CONFIG.merchantPhone ? CONFIG.merchantPhone.trim() : '';
-  const configPwd = CONFIG.merchantPassword || '';
+  // 优先读取已持久化的密码（通过安全设置修改过的），否则用 CONFIG 默认值
+  const effectivePwd = securityConfig.merchantPassword || CONFIG.merchantPassword || '';
 
   // 支持 CONFIG.merchantPhone 或动态同步的 allowedPhones 集合
   if (phone.trim() !== configPhone && !allowedPhones.has(phone.trim())) {
     return res.status(400).json({ code: 'FAIL', message: '手机号或密码错误' });
   }
 
-  // 验证密码（支持直接比较或哈希比较）
-  const isValidPwd = (password === configPwd) ||
-    (hashMerchantPwd(password) === hashMerchantPwd(configPwd) && configPwd !== '');
-
-  // 如果 CONFIG 中的密码是明文 yy123456，直接比较
-  if (password === configPwd && configPwd === 'yy123456') {
+  // 验证密码：明文比较或哈希比较
+  if (password === effectivePwd) {
     const token = crypto.randomBytes(16).toString('hex');
     merchantSessions.set(token, { createdAt: Date.now(), phone: phone.trim() });
     return res.json({ code: 'OK', token, message: '登录成功' });
   }
 
-  // 否则验证哈希
   const inputHash = hashMerchantPwd(password);
-  const storedHash = configPwd ? hashMerchantPwd(configPwd) : '';
-  if (inputHash === storedHash && configPwd !== '') {
+  const storedHash = effectivePwd ? hashMerchantPwd(effectivePwd) : '';
+  if (inputHash === storedHash && effectivePwd !== '') {
     const token = crypto.randomBytes(16).toString('hex');
     merchantSessions.set(token, { createdAt: Date.now(), phone: phone.trim() });
     return res.json({ code: 'OK', token, message: '登录成功' });
@@ -973,7 +969,8 @@ app.post('/api/login/change-password', express.json(), (req, res) => {
     return res.status(400).json({ code: 'FAIL', message: '两次输入的新密码不一致' });
   }
 
-  const configPwd = CONFIG.merchantPassword || '';
+  // 优先读持久化的密码，否则用 CONFIG 默认值
+  const configPwd = securityConfig.merchantPassword || CONFIG.merchantPassword || '';
 
   // 验证原密码
   let oldValid = false;
@@ -987,10 +984,8 @@ app.post('/api/login/change-password', express.json(), (req, res) => {
     return res.status(400).json({ code: 'FAIL', message: '原密码错误' });
   }
 
-  // 更新密码（明文存储，由商户管理系统注入）
+  // 同步更新 CONFIG 和持久化配置
   CONFIG.merchantPassword = newPassword;
-
-  // 同时更新 securityConfig 中的 merchantPassword（用于商户管理系统同步）
   securityConfig.merchantPassword = newPassword;
   saveSecurity();
 
