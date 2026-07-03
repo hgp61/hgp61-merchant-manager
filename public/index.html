@@ -1119,7 +1119,6 @@ async function openMerchantDetail(id) {
       `;
     }
     grid.innerHTML = html;
-    document.getElementById('detailMerchantUrl').value = d.merchantUrl || '';
     document.getElementById('detailModal').classList.add('show');
   } catch (e) {
     showToast('加载详情失败', 'error');
@@ -1131,53 +1130,6 @@ function closeDetailModal() {
   detailMerchantId = null;
 }
 
-async function saveMerchantUrl() {
-  if (!detailMerchantId) return;
-  const url = document.getElementById('detailMerchantUrl').value.trim();
-  try {
-    const res = await fetch(`/api/merchants/${detailMerchantId}`, {
-      method: 'PUT',
-      headers: authHeaders(),
-      body: JSON.stringify({ merchantUrl: url })
-    });
-    const json = await res.json();
-    if (json.code === 'OK') {
-      const idx = merchants.findIndex(m => m.id === detailMerchantId);
-      if (idx !== -1) merchants[idx].merchantUrl = url;
-      showToast('访问地址已保存', 'success');
-    } else {
-      showToast(json.message || '保存失败', 'error');
-    }
-  } catch (e) {
-    showToast('网络错误', 'error');
-  }
-}
-
-async function saveMerchantName() {
-  if (!detailMerchantId) return;
-  const name = document.getElementById('detailMerchantName').value.trim();
-  if (!name) return showToast('商户名称不能为空', 'error');
-  try {
-    const res = await fetch(`/api/merchants/${detailMerchantId}`, {
-      method: 'PUT',
-      headers: authHeaders(),
-      body: JSON.stringify({ merchantName: name })
-    });
-    const json = await res.json();
-    if (json.code === 'OK') {
-      const idx = merchants.findIndex(m => m.id === detailMerchantId);
-      if (idx !== -1) {
-        merchants[idx].merchantName = name;
-      }
-      renderMerchantTable();
-      showToast('商户名称已保存并同步到收款后台', 'success');
-    } else {
-      showToast(json.message || '保存失败', 'error');
-    }
-  } catch (e) {
-    showToast('网络错误', 'error');
-  }
-}
 
 // ===== 一键部署商户收款后台 =====
 async function deployMerchant() {
