@@ -16,6 +16,189 @@ const AdmZip = require('adm-zip');
 const AlipaySdk = require('alipay-sdk').default || require('alipay-sdk');
 const QRCode = require('qrcode');
 
+// ======================== PostgreSQL 数据持久化 ========================
+const DATABASE_URL = process.env.DATABASE_URL;
+let pgPool = null;
+
+async function connectDb() {
+  if (!DATABASE_URL) return null;
+  try {
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    await pool.query('SELECT 1');
+    console.log('[DB] PostgreSQL 连接成功');
+    return pool;
+  } catch (err) {
+    console.error('[DB] PostgreSQL 连接失败:', err.message);
+    return null;
+  }
+}
+
+async function createTables(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS merchants (
+      id VARCHAR(32) PRIMARY KEY,
+      type VARCHAR(16) NOT NULL,
+      merchant_name VARCHAR(128),
+      phone VARCHAR(16),
+      password VARCHAR(256),
+      alipay_uid VARCHAR(32),
+      file_name VARCHAR(128),
+      app_id VARCHAR(64),
+      private_key TEXT,
+      alipay_public_key TEXT,
+      key_type VARCHAR(16),
+      merchant_url VARCHAR(256),
+      enabled BOOLEAN DEFAULT true,
+      mgr_min_amount NUMERIC,
+      mgr_max_amount NUMERIC,
+      zip_generated BOOLEAN DEFAULT false,
+      created_at TIMESTAMP
+    );`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_config (
+      id INTEGER PRIMARY KEY,
+      password VARCHAR(256) NOT NULL
+    );`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS merchant_json_data (
+      merchant_id VARCHAR(32) NOT NULL,
+      data_name VARCHAR(32) NOT NULL,
+      data_json JSONB NOT NULL,
+      PRIMARY KEY (merchant_id, data_name)
+    );`);
+}
+
+async function restoreFromDb(pool) {
+  // Restore merchants
+  const { rows } = await pool.query('SELECT * FROM merchants');
+  if (rows.length > 0) {
+    const merchants = rows.map(r => ({
+      id: r.id,
+      type: r.type,
+      merchantName: r.merchant_name,
+      phone: r.phone,
+      password: r.password,
+      alipayUid: r.alipay_uid,
+      fileName: r.file_name,
+      appId: r.app_id,
+      privateKey: r.private_key,
+      alipayPublicKey: r.alipay_public_key,
+      keyType: r.key_type,
+      merchantUrl: r.merchant_url,
+      enabled: r.enabled,
+      mgrMinAmount: r.mgr_min_amount,
+      mgrMaxAmount: r.mgr_max_amount,
+      zipGenerated: r.zip_generated,
+      createdAt: r.created_at
+    }));
+    fs.writeFileSync(MERCHANTS_FILE, JSON.stringify(merchants, null, 2), 'utf-8');
+    console.log('[DB] 已恢复', merchants.length, '个商户');
+  }
+
+  // Restore admin config
+  const { rows: adminRows } = await pool.query('SELECT * FROM admin_config WHERE id = 1');
+  if (adminRows.length > 0) {
+    fs.writeFileSync(ADMIN_CONFIG_FILE, JSON.stringify({ password: adminRows[0].password }, null, 2), 'utf-8');
+    console.log('[DB] 已恢复管理员配置');
+  }
+
+  // Restore merchant JSON data
+  const { rows: dataRows } = await pool.query('SELECT * FROM merchant_json_data');
+  for (const row of dataRows) {
+    const dir = getMerchantDir(row.merchant_id);
+    fs.writeFileSync(path.join(dir, row.data_name + '.json'), JSON.stringify(row.data_json, null, 2), 'utf-8');
+  }
+  if (dataRows.length > 0) {
+    console.log('[DB] 已恢复', dataRows.length, '条商户数据');
+  }
+}
+
+async function syncMerchantsToDb(pool, list) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM merchants');
+    for (const m of list) {
+      await client.query(
+        `INSERT INTO merchants (id, type, merchant_name, phone, password, alipay_uid, file_name, app_id, private_key, alipay_public_key, key_type, merchant_url, enabled, mgr_min_amount, mgr_max_amount, zip_generated, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         ON CONFLICT (id) DO UPDATE SET
+           type=EXCLUDED.type, merchant_name=EXCLUDED.merchant_name, phone=EXCLUDED.phone,
+           password=EXCLUDED.password, alipay_uid=EXCLUDED.alipay_uid, file_name=EXCLUDED.file_name,
+           app_id=EXCLUDED.app_id, private_key=EXCLUDED.private_key, alipay_public_key=EXCLUDED.alipay_public_key,
+           key_type=EXCLUDED.key_type, merchant_url=EXCLUDED.merchant_url, enabled=EXCLUDED.enabled,
+           mgr_min_amount=EXCLUDED.mgr_min_amount, mgr_max_amount=EXCLUDED.mgr_max_amount,
+           zip_generated=EXCLUDED.zip_generated, created_at=EXCLUDED.created_at`,
+        [m.id, m.type, m.merchantName || null, m.phone || null, m.password || null,
+         m.alipayUid || null, m.fileName || null, m.appId || null, m.privateKey || null,
+         m.alipayPublicKey || null, m.keyType || null, m.merchantUrl || null,
+         m.enabled !== false, m.mgrMinAmount || null, m.mgrMaxAmount || null,
+         m.zipGenerated || false, m.createdAt || null]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function syncAdminConfigToDb(pool, cfg) {
+  await pool.query(
+    `INSERT INTO admin_config (id, password) VALUES (1, $1)
+     ON CONFLICT (id) DO UPDATE SET password = EXCLUDED.password`,
+    [cfg.password]
+  );
+}
+
+async function syncMerchantDataToDb(pool, merchantId, name, data) {
+  await pool.query(
+    `INSERT INTO merchant_json_data (merchant_id, data_name, data_json) VALUES ($1, $2, $3)
+     ON CONFLICT (merchant_id, data_name) DO UPDATE SET data_json = EXCLUDED.data_json`,
+    [merchantId, name, JSON.stringify(data)]
+  );
+}
+
+async function initDb() {
+  if (!DATABASE_URL) {
+    console.log('[DB] 未配置 DATABASE_URL，使用 JSON 文件存储');
+    return;
+  }
+  pgPool = await connectDb();
+  if (!pgPool) return;
+  await createTables(pgPool);
+  await restoreFromDb(pgPool);
+  console.log('[DB] 数据初始化完成');
+}
+
+// ======================== 数据写入同步（JSON + PostgreSQL） ========================
+function saveMerchantsWithSync(list) {
+  fs.writeFileSync(MERCHANTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  if (pgPool) {
+    syncMerchantsToDb(pgPool, list).catch(err => console.error('[DB] 同步 merchants 失败:', err.message));
+  }
+}
+
+function saveAdminConfigWithSync(cfg) {
+  fs.writeFileSync(ADMIN_CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf-8');
+  if (pgPool) {
+    syncAdminConfigToDb(pgPool, cfg).catch(err => console.error('[DB] 同步 admin config 失败:', err.message));
+  }
+}
+
+function saveMerchantFileWithSync(id, name, data) {
+  fs.writeFileSync(path.join(getMerchantDir(id), name + '.json'), JSON.stringify(data, null, 2), 'utf-8');
+  if (pgPool) {
+    syncMerchantDataToDb(pgPool, id, name, data).catch(err => console.error('[DB] 同步 merchant data 失败:', err.message));
+  }
+}
+
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -45,10 +228,10 @@ function loadAdminConfig() {
 }
 
 function saveAdminConfig(cfg) {
-  fs.writeFileSync(ADMIN_CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf-8');
+  saveAdminConfigWithSync(cfg);
 }
 
-let adminConfig = loadAdminConfig();
+let adminConfig;
 const ADMIN_USERNAME = 'admin';
 const adminSessions = new Map();
 const SESSION_TTL = 24 * 60 * 60 * 1000;
@@ -79,7 +262,7 @@ function loadMerchantFile(id, name, defaultVal) {
 }
 
 function saveMerchantFile(id, name, data) {
-  fs.writeFileSync(path.join(getMerchantDir(id), name + '.json'), JSON.stringify(data, null, 2), 'utf-8');
+  saveMerchantFileWithSync(id, name, data);
 }
 
 function getMerchantRuntime(id, merchant) {
@@ -199,7 +382,7 @@ function loadMerchants() {
 }
 
 function saveMerchants(list) {
-  fs.writeFileSync(MERCHANTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  saveMerchantsWithSync(list);
 }
 
 function genId() {
@@ -1507,16 +1690,20 @@ app.get('/m/:id/api/config', (req, res) => {
 
 // ======================== 启动服务 ========================
 
-// 预加载所有已有商户的运行时
-const existingMerchants = loadMerchants();
-for (const m of existingMerchants) {
-  getMerchantRuntime(m.id, m);
-}
-
 // 管理端静态文件
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.listen(PORT, () => {
+async function start() {
+  await initDb();
+  adminConfig = loadAdminConfig();
+
+  // 预加载所有已有商户的运行时（在 initDb 恢复数据后执行）
+  const existingMerchants = loadMerchants();
+  for (const m of existingMerchants) {
+    getMerchantRuntime(m.id, m);
+  }
+
+  app.listen(PORT, () => {
   console.log('');
   console.log('========================================');
   console.log('  黑金PAY 商户管理系统（统一端口）');
@@ -1534,3 +1721,6 @@ app.listen(PORT, () => {
   }
   console.log('');
 });
+}
+
+start();
