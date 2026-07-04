@@ -21,7 +21,10 @@
     overflow-x: hidden;
     min-height: 100vh;
     scrollbar-gutter: stable;
+    /* 防止未登录时页面闪烁 */
+    display: none;
   }
+  body.ready { display: flex; }
   /* ===== 黑金流光全局滚动条 ===== */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: #0f0f0f; }
@@ -1717,7 +1720,7 @@
         </div>
         <div class="filter-item">
           <span class="filter-label">订单号</span>
-          <input type="text" class="filter-input" id="orderSearch" placeholder="请输入订单号">
+          <input type="text" class="filter-input" id="orderSearch" placeholder="请输入订单号" autocomplete="off">
         </div>
         <div class="filter-item">
           <span class="filter-label">支付状态</span>
@@ -4370,6 +4373,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   // 先检查登录状态
   const loggedIn = await checkLoginStatus();
   if (!loggedIn) return; // 未登录已跳转
+  document.body.classList.add('ready');
 
   // 初始化页面状态：恢复上次访问的页面（默认主页）
   var savedPage = 'home';

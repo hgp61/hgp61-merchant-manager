@@ -33,7 +33,9 @@
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
+    display: none;
   }
+  body.ready { display: block; }
 
   /* ===== 顶部导航 ===== */
   .topbar {
@@ -906,6 +908,7 @@ async function checkAuth() {
     });
     const json = await res.json();
     if (!json.loggedIn) location.href = 'login.html';
+    else document.body.classList.add('ready');
   } catch (e) {
     location.href = 'login.html';
   }
