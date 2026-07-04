@@ -3784,10 +3784,12 @@ function renderMerchantQRCode() {
   box.innerHTML = '';  // 清空容器
 
   var cashierUrl = window.location.origin + window.location.pathname.replace(/admin\.html$/, 'cashier.html');
+  // 使用支付宝URL scheme，在支付宝内扫描时直接以内置浏览器打开，避免"即将离开支付宝"提示
+  var alipayScheme = 'alipays://platformapi/startapp?appId=20000067&url=' + encodeURIComponent(cashierUrl);
 
   // qrcodejs API：直接在容器内创建（生成 400x400 高清源，CSS 限制显示为 200px）
   _merchantQrInstance = new QRCode(box, {
-    text: cashierUrl,
+    text: alipayScheme,
     width: 400,
     height: 400,
     colorDark: '#b8860b',
