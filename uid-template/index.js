@@ -113,6 +113,14 @@ setInterval(cleanExpiredSessions, 10 * 60 * 1000);
 
 // ======================== 【工具函数】 ========================
 
+// 将 IPv6-mapped IPv4 地址转换为纯 IPv4，便于查询 IP 所在地
+function toIPv4(ip) {
+  if (!ip) return ip;
+  if (ip.startsWith('::ffff:')) return ip.slice(7);
+  if (ip === '::1') return '127.0.0.1';
+  return ip;
+}
+
 // 发起 HTTP/HTTPS 请求（用于第三方 API 调用）
 function httpRequest(url, options = {}) {
   return new Promise((resolve, reject) => {
@@ -276,7 +284,7 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
         useApi: false,
         createdAt: new Date().toISOString(),
         paidAt: null,
-        payerIp: req.ip,
+        payerIp: toIPv4(req.ip),
       });
       await saveOrders();
 
@@ -692,6 +700,8 @@ function getMerchantNameByPhone(phone) {
   return (entry && entry.name) || securityConfig.merchantName || CONFIG.merchantName || '';
 }
 
+// 加载安全配置（支持数据库或本地文件）
+(async () => {
   if (pgPool) {
     try {
       const result = await pgPool.query("SELECT value FROM app_data WHERE key = 'security'");
@@ -727,7 +737,7 @@ function getMerchantNameByPhone(phone) {
   if (!securityConfig.merchantPassword && CONFIG.merchantPassword) {
     securityConfig.merchantPassword = CONFIG.merchantPassword;
   }
-}
+})();
 
 async function saveSecurity() {
   if (pgPool) {

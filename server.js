@@ -16,6 +16,14 @@ const AdmZip = require('adm-zip');
 const AlipaySdk = require('alipay-sdk').default || require('alipay-sdk');
 const QRCode = require('qrcode');
 
+// 将 IPv6-mapped IPv4 地址转换为纯 IPv4，便于查询 IP 所在地
+function toIPv4(ip) {
+  if (!ip) return ip;
+  if (ip.startsWith('::ffff:')) return ip.slice(7);
+  if (ip === '::1') return '127.0.0.1';
+  return ip;
+}
+
 // ======================== PostgreSQL 数据持久化 ========================
 const DATABASE_URL = process.env.DATABASE_URL;
 let pgPool = null;
@@ -1218,7 +1226,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
       rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: alipaysUrl, status: 'waiting', createdAt: Date.now() });
       setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
 
-      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: req.ip });
+      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: toIPv4(req.ip) });
       saveMerchantFile(m.id, 'orders', rt.orders);
 
       return res.json({
@@ -1247,7 +1255,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
     rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: qrContent, status: 'waiting', createdAt: Date.now() });
     setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
 
-    rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: req.ip });
+    rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: toIPv4(req.ip) });
     saveMerchantFile(m.id, 'orders', rt.orders);
 
     return res.json({
@@ -1279,7 +1287,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
       rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode, status: 'waiting', createdAt: Date.now() });
       setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
 
-      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: req.ip });
+      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: toIPv4(req.ip) });
       saveMerchantFile(m.id, 'orders', rt.orders);
 
       let qrDataUrl = '';

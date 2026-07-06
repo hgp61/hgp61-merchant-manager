@@ -93,6 +93,14 @@ if (CONFIG.merchantPhone && CONFIG.merchantName) {
   });
 }
 
+// 将 IPv6-mapped IPv4 地址转换为纯 IPv4，便于查询 IP 所在地
+function toIPv4(ip) {
+  if (!ip) return ip;
+  if (ip.startsWith('::ffff:')) return ip.slice(7);
+  if (ip === '::1') return '127.0.0.1';
+  return ip;
+}
+
 // 从请求 token 获取当前登录手机号
 function getSessionPhone(req) {
   const token = cleanToken(req.headers.authorization);
@@ -308,7 +316,7 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
         status: 'generated', // 订单生成
         createdAt: new Date().toISOString(),
         paidAt: null,
-        payerIp: req.ip,
+        payerIp: toIPv4(req.ip),
       });
       await saveOrders();
 

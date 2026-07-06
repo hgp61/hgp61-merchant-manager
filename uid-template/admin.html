@@ -1020,6 +1020,9 @@
   .modal-title.success-title::before {
     content: none;
   }
+  .modal-title.detail-title::before {
+    content: none;
+  }
   .modal-info {
     background: rgba(255,255,255,0.03);
     border-radius: 8px; padding: 14px 16px; margin-bottom: 18px;
@@ -2004,7 +2007,7 @@
 <!-- 订单详情弹窗 -->
 <div class="modal-overlay" id="orderDetailOverlay">
   <div class="modal-dialog" style="min-width:440px; max-width:520px;">
-    <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="modal-title detail-title" style="display:flex; justify-content:space-between; align-items:center;">
       <span>📋 订单详情</span>
       <span onclick="closeOrderDetail()" style="cursor:pointer; font-size:20px; color:rgba(212,175,55,0.5); line-height:1;">&times;</span>
     </div>
