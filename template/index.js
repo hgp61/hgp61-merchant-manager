@@ -308,6 +308,7 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
         status: 'generated', // 订单生成
         createdAt: new Date().toISOString(),
         paidAt: null,
+        payerIp: req.ip,
       });
       await saveOrders();
 

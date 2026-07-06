@@ -276,6 +276,7 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
         useApi: false,
         createdAt: new Date().toISOString(),
         paidAt: null,
+        payerIp: req.ip,
       });
       await saveOrders();
 
@@ -389,6 +390,7 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
       useApi,
       createdAt: new Date().toISOString(),
       paidAt: null,
+      payerIp: req.ip,
     });
     await saveOrders();
 

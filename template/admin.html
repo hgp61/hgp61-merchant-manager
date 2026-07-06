@@ -943,6 +943,51 @@
     margin-left: 6px;
   }
 
+  /* 订单详情按钮 */
+  .btn-detail-order {
+    background: rgba(212,175,55,0.08);
+    border: 1px solid rgba(212,175,55,0.3);
+    color: #d4af37;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .btn-detail-order:hover {
+    background: rgba(212,175,55,0.18);
+    border-color: rgba(212,175,55,0.55);
+    box-shadow: 0 2px 10px rgba(212,175,55,0.15);
+  }
+
+  /* 订单详情弹窗 */
+  .detail-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .detail-table td {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(212,175,55,0.08);
+    font-size: 13px;
+    vertical-align: top;
+  }
+  .detail-table td:first-child {
+    width: 90px;
+    color: rgba(212,175,55,0.5);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .detail-table td:last-child {
+    color: #e0d8c8;
+    word-break: break-all;
+  }
+  .detail-table tr:last-child td {
+    border-bottom: none;
+  }
+
   /* 退款确认弹窗 */
   .modal-overlay {
     display: none;
@@ -1956,6 +2001,31 @@
   </div>
 </div>
 
+<!-- 订单详情弹窗 -->
+<div class="modal-overlay" id="orderDetailOverlay">
+  <div class="modal-dialog" style="min-width:440px; max-width:520px;">
+    <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center;">
+      <span>📋 订单详情</span>
+      <span onclick="closeOrderDetail()" style="cursor:pointer; font-size:20px; color:rgba(212,175,55,0.5); line-height:1;">&times;</span>
+    </div>
+    <div class="modal-info" style="padding:0; background:none;">
+      <table class="detail-table">
+        <tr><td>订单号</td><td id="detailOutTradeNo">--</td></tr>
+        <tr><td>交易号</td><td id="detailTradeNo">--</td></tr>
+        <tr><td>商品说明</td><td id="detailSubject">--</td></tr>
+        <tr><td>支付金额</td><td id="detailAmount">--</td></tr>
+        <tr><td>支付状态</td><td id="detailStatus">--</td></tr>
+        <tr><td>付款方IP</td><td id="detailPayerIp">--</td></tr>
+        <tr><td>创建时间</td><td id="detailCreatedAt">--</td></tr>
+        <tr style="display:none;" id="detailPaidRow"><td>支付时间</td><td id="detailPaidAt">--</td></tr>
+      </table>
+    </div>
+    <div class="modal-btns" style="justify-content:center;">
+      <button class="btn-primary" onclick="closeOrderDetail()" style="padding:10px 40px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:none;letter-spacing:2px;background:linear-gradient(135deg,#c99c2c,#d4af37);color:#0a0a0a;">关 闭</button>
+    </div>
+  </div>
+</div>
+
 <!-- 退款确认弹窗 -->
 <div class="modal-overlay" id="refundModalOverlay">
   <div class="modal-dialog">
@@ -2486,6 +2556,40 @@ function fmtTime(isoStr) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+// ===== 订单详情弹窗 =====
+function showOrderDetail(outTradeNo) {
+  // 从已加载的订单列表中查找
+  const order = allOrders.find(o => o.outTradeNo === outTradeNo);
+  if (!order) {
+    showAlert('未找到该订单信息');
+    return;
+  }
+
+  const statusInfo = STATUS_MAP[order.status] || { text: order.status };
+
+  document.getElementById('detailOutTradeNo').textContent = order.outTradeNo || '--';
+  document.getElementById('detailTradeNo').textContent = order.tradeNo || '--';
+  document.getElementById('detailSubject').textContent = order.subject || '--';
+  document.getElementById('detailAmount').textContent = fmtAmount(parseFloat(order.amount || 0));
+  document.getElementById('detailStatus').innerHTML = `<span class="status-badge ${statusInfo.cls}">${statusInfo.text}</span>`;
+  document.getElementById('detailPayerIp').textContent = order.payerIp || '--';
+  document.getElementById('detailCreatedAt').textContent = fmtTime(order.createdAt);
+
+  const paidRow = document.getElementById('detailPaidRow');
+  if (order.paidAt) {
+    paidRow.style.display = '';
+    document.getElementById('detailPaidAt').textContent = fmtTime(order.paidAt);
+  } else {
+    paidRow.style.display = 'none';
+  }
+
+  document.getElementById('orderDetailOverlay').classList.add('show');
+}
+
+function closeOrderDetail() {
+  document.getElementById('orderDetailOverlay').classList.remove('show');
+}
+
 // 加载订单列表
 async function loadOrders() {
   try {
@@ -2541,6 +2645,7 @@ function renderOrders() {
           ${o.refund ? `<span class="date-row"><span class="date-label">退款</span>${fmtTime(o.refund.refundedAt)}</span>` : ''}
         </td>
         <td>
+          <button class="btn-detail-order" onclick="showOrderDetail('${o.outTradeNo}')">详情</button>
           ${o.status === 'paid' && !o.refund ? `<button class="btn-refund" onclick="handleRefundClick('${o.outTradeNo}', '${fmtAmount(parseFloat(o.amount))}')">退款</button>` : ''}
           ${o.refund ? `<span class="refund-info">已退款</span>` : ''}
         </td>
@@ -3112,6 +3217,9 @@ document.getElementById('refundModalOverlay').addEventListener('click', function
 });
 document.getElementById('refundSuccessOverlay').addEventListener('click', function(e) {
   if (e.target === this) closeRefundSuccess();
+});
+document.getElementById('orderDetailOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeOrderDetail();
 });
 
 // ==================== 初始化 ====================
@@ -3728,7 +3836,7 @@ function updateSecurityUI() {
   if (phoneInput) { phoneInput.value = mPhone; }
   var topName = document.getElementById('topNavMerchantName');
   var topAvatar = document.getElementById('topNavAvatar');
-  if (topName && mName) { topName.textContent = mName; }
+  if (topName && mName) { topName.textContent = mName.length > 3 ? mName.substring(0, 3) + '...' : mName; }
   if (topAvatar && mName) { topAvatar.textContent = mName.charAt(0); }
 
   // 渲染收款二维码
@@ -3785,12 +3893,10 @@ function renderMerchantQRCode() {
   box.innerHTML = '';  // 清空容器
 
   var cashierUrl = window.location.origin + window.location.pathname.replace(/admin\.html$/, 'cashier.html');
-  // 使用支付宝URL scheme，在支付宝内扫描时直接以内置浏览器打开，避免"即将离开支付宝"提示
-  var alipayScheme = 'alipays://platformapi/startapp?appId=20000067&url=' + encodeURIComponent(cashierUrl);
 
   // qrcodejs API：直接在容器内创建（生成 400x400 高清源，CSS 限制显示为 200px）
   _merchantQrInstance = new QRCode(box, {
-    text: alipayScheme,
+    text: cashierUrl,
     width: 400,
     height: 400,
     colorDark: '#b8860b',
@@ -4398,7 +4504,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       var val = this.value.trim();
       var topName = document.getElementById('topNavMerchantName');
       var topAvatar = document.getElementById('topNavAvatar');
-      if (topName) topName.textContent = val || '商户';
+      if (topName) topName.textContent = val.length > 3 ? val.substring(0, 3) + '...' : (val || '商户');
       if (topAvatar) topAvatar.textContent = (val && val.length > 0) ? val.charAt(0) : '商';
     // 防抖保存到服务端
     clearTimeout(merchantSaveTimer);

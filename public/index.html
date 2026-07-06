@@ -198,14 +198,19 @@
     border-radius: 4px; font-size: 11px; font-weight: 700;
   }
   .type-badge.type-uid {
+    background: rgba(212,175,55,0.15);
+    color: #d4af37;
+    border: 1px solid rgba(212,175,55,0.3);
+  }
+  .type-badge.type-uid-simple {
+    background: rgba(230,126,34,0.15);
+    color: #e67e22;
+    border: 1px solid rgba(230,126,34,0.3);
+  }
+  .type-badge.type-face {
     background: rgba(52,152,219,0.15);
     color: #3498db;
     border: 1px solid rgba(52,152,219,0.3);
-  }
-  .type-badge.type-uid-simple {
-    background: rgba(46,204,113,0.15);
-    color: #2ecc71;
-    border: 1px solid rgba(46,204,113,0.3);
   }
 
   .action-btns { display: flex; gap: 8px; }
@@ -678,20 +683,20 @@
     <div class="type-cards">
       <div class="type-card" onclick="selectUidType()">
         <div class="type-card-icon">📱</div>
-        <div class="type-card-name">UID 进件</div>
-        <div class="type-card-desc">只需提供支付宝 UID<br>扫码唤起转账，手动确认到账</div>
+        <div class="type-card-name">UID 固码</div>
+        <div class="type-card-desc">需提供支付宝 UID<br>可生成固定金额的收款码</div>
         <div class="gold-dot"></div>
       </div>
       <div class="type-card" onclick="selectUidSimpleType()">
         <div class="type-card-icon">⚡</div>
-        <div class="type-card-name">UID 简易支付</div>
-        <div class="type-card-desc">只需提供支付宝 UID<br>输入金额后直接跳转支付宝转账</div>
+        <div class="type-card-name">UID 直付</div>
+        <div class="type-card-desc">需提供支付宝 UID<br>可直接跳到转账页面</div>
         <div class="gold-dot"></div>
       </div>
       <div class="type-card" onclick="selectFaceType()">
         <div class="type-card-icon">💳</div>
         <div class="type-card-name">当面付进件</div>
-        <div class="type-card-desc">需要 APPID + 密钥<br>自动回调，全自动处理</div>
+        <div class="type-card-desc">需提供 APPID + 双密钥<br>可生成动态码<br>支付即刻失效</div>
         <div class="gold-dot"></div>
       </div>
     </div>
@@ -752,7 +757,7 @@
 <div class="modal-overlay" id="uidModal">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">增加商户 · UID 进件</div>
+      <div class="modal-title" id="uidModalTitle">增加商户 · UID 固码</div>
       <button class="modal-close" onclick="closeAddModal()">&times;</button>
     </div>
     <div class="modal-body">
@@ -985,8 +990,8 @@ function renderMerchants() {
     const isFace = m.type === 'face';
     let typeLabel = '当面付';
     let typeBadgeClass = 'type-face';
-    if (isUid) { typeLabel = 'UID'; typeBadgeClass = 'type-uid'; }
-    if (isUidSimple) { typeLabel = '简易支付'; typeBadgeClass = 'type-uid-simple'; }
+    if (isUid) { typeLabel = 'UID固码'; typeBadgeClass = 'type-uid'; }
+    if (isUidSimple) { typeLabel = 'UID直付'; typeBadgeClass = 'type-uid-simple'; }
     const idLabel = (isUid || isUidSimple) ? maskString(m.alipayUid || '') : maskString(m.appId || '');
     const isEnabled = m.enabled !== false; // default true
     return `
@@ -1049,6 +1054,7 @@ function selectUidType() {
   currentUidAddType = 'uid';
   document.getElementById('typeSelectModal').classList.remove('show');
   document.getElementById('uidModal').classList.add('show');
+  document.getElementById('uidModalTitle').textContent = '增加商户 · UID 固码';
   document.getElementById('inputUidMerchantName').value = '';
   document.getElementById('inputUidPhone').value = '';
   document.getElementById('inputAlipayUid').value = '';
@@ -1059,6 +1065,7 @@ function selectUidSimpleType() {
   currentUidAddType = 'uid-simple';
   document.getElementById('typeSelectModal').classList.remove('show');
   document.getElementById('uidModal').classList.add('show');
+  document.getElementById('uidModalTitle').textContent = '增加商户 · UID 直付';
   document.getElementById('inputUidMerchantName').value = '';
   document.getElementById('inputUidPhone').value = '';
   document.getElementById('inputAlipayUid').value = '';
@@ -1154,7 +1161,7 @@ async function submitUidMerchant() {
     const json = await res.json();
 
     if (json.code === 'OK') {
-      showToast(currentUidAddType === 'uid-simple' ? 'UID 简易支付商户添加成功' : 'UID 商户添加成功', 'success');
+      showToast(currentUidAddType === 'uid-simple' ? 'UID直付商户添加成功' : 'UID固码商户添加成功', 'success');
       closeAddModal();
       merchants.push(json.data);
       renderMerchants();
@@ -1253,8 +1260,8 @@ async function openMerchantDetail(id) {
     const isUidSimple = d.type === 'uid-simple';
     const isFace = d.type === 'face';
     let typeDisplay = '当面付';
-    if (isUid) typeDisplay = 'UID 进件';
-    if (isUidSimple) typeDisplay = 'UID 简易支付';
+    if (isUid) typeDisplay = 'UID固码';
+    if (isUidSimple) typeDisplay = 'UID直付';
     const grid = document.getElementById('detailGrid');
     let html = `
       <div class="detail-item detail-full">

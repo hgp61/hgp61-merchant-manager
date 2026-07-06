@@ -1218,7 +1218,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
       rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: alipaysUrl, status: 'waiting', createdAt: Date.now() });
       setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
 
-      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null });
+      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: req.ip });
       saveMerchantFile(m.id, 'orders', rt.orders);
 
       return res.json({
@@ -1247,7 +1247,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
     rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: qrContent, status: 'waiting', createdAt: Date.now() });
     setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
 
-    rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null });
+    rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: req.ip });
     saveMerchantFile(m.id, 'orders', rt.orders);
 
     return res.json({
@@ -1279,7 +1279,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
       rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode, status: 'waiting', createdAt: Date.now() });
       setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
 
-      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null });
+      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: req.ip });
       saveMerchantFile(m.id, 'orders', rt.orders);
 
       let qrDataUrl = '';
