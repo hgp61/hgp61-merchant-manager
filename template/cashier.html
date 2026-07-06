@@ -972,6 +972,7 @@
     .qr-img { width: 220px; height: 220px; }
   }
 </style>
+<script src="https://gw.alipayobjects.com/as/g/h5-lib/alipayjsapi/3.1.2/alipayjsapi.min.js"></script>
 </head>
 <body>
 
@@ -1111,6 +1112,32 @@
 // ==================== 配置 ====================
 const API_BASE = '';
 
+// ==================== 支付宝环境检测 ====================
+var alipayReady = false;
+var isInAlipay = /AlipayClient/i.test(navigator.userAgent);
+
+if (isInAlipay) {
+  if (window.AlipayJSBridge) {
+    alipayReady = true;
+  } else {
+    document.addEventListener('AlipayJSBridgeReady', function() { alipayReady = true; }, false);
+  }
+}
+
+// 支付宝原生 toast
+function alipayToast(msg) {
+  if (alipayReady && window.AlipayJSBridge) {
+    AlipayJSBridge.call('toast', { content: msg, duration: 2000 });
+  }
+}
+
+// 关闭 webview 回到支付宝
+function closeAlipayWebview() {
+  if (alipayReady && window.AlipayJSBridge) {
+    AlipayJSBridge.call('closeWebview');
+  }
+}
+
 // ==================== 状态 ====================
 let currentOutTradeNo = '';
 let pollingTimer = null;
@@ -1222,6 +1249,18 @@ async function createQRCode() {
     if (data.code === 'OK') {
       currentOutTradeNo = data.out_trade_no;
       lastQrImage = data.qr_image || '';
+
+      // 支付宝 webview 内：直接跳转支付链接，不显示二维码
+      if (isInAlipay && data.qr_code) {
+        alipayToast('正在跳转支付宝付款...');
+        // 短暂延迟确保 toast 显示
+        setTimeout(function() {
+          window.location.href = data.qr_code;
+        }, 500);
+        startPolling();
+        return;
+      }
+
       showQRCode(data);
       startPolling();
     } else if (data.code === 'ALIPAY_ERROR') {
@@ -1325,7 +1364,20 @@ function showSuccess(data) {
   if (data.payer) {
     document.getElementById('successPayer').textContent = `付款方: ${data.payer}`;
   }
+
+  // 支付宝内：显示成功后自动关闭 webview
+  if (alipayReady) {
+    alipayToast('支付成功');
+    setTimeout(function() { closeAlipayWebview(); }, 2500);
+  }
 }
+
+// 支付宝 webview 返回时恢复轮询
+window.addEventListener('pageshow', function(e) {
+  if (e.persisted && currentOutTradeNo && pollingTimer === null) {
+    startPolling();
+  }
+});
 
 // ==================== 重置到输入状态 ====================
 function resetToInput() {
@@ -1350,6 +1402,10 @@ function resetToInput() {
 
 // ==================== 错误提示 ====================
 function showError(msg) {
+  // 支付宝内用原生 toast
+  if (alipayReady) {
+    alipayToast(msg);
+  }
   const toast = document.getElementById('errorToast');
   toast.textContent = msg;
   toast.classList.add('show');
