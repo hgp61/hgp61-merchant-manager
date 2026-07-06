@@ -937,6 +937,7 @@
     .qr-img { width: 220px; height: 220px; }
   }
 </style>
+<script src="https://gw.alipayobjects.com/as/g/h5-lib/alipayjsbridge/2.9.2/alipayjsbridge.js"></script>
 </head>
 <body>
   <!-- 非支付宝浏览器提示页（默认隐藏） -->
@@ -1094,6 +1095,32 @@
 </div>
 
 <script>
+// ==================== 支付宝 JSSDK ====================
+let alipayReady = false;
+document.addEventListener('AlipayJSBridgeReady', function() {
+  alipayReady = true;
+}, false);
+
+// 支付宝原生 Toast 提示
+function alipayToast(msg, type) {
+  if (alipayReady && window.AlipayJSBridge) {
+    AlipayJSBridge.call('toast', {
+      content: msg || '',
+      type: type || 'none',
+      duration: 2000
+    });
+    return true;
+  }
+  return false;
+}
+
+// 关闭 webview 回到支付宝
+function closeAlipayWebview() {
+  if (alipayReady && window.AlipayJSBridge) {
+    AlipayJSBridge.call('closeWebview');
+  }
+}
+
 // ==================== 配置 ====================
 const API_BASE = '';
 let IS_SIMPLE = false; // 是否为 UID 简易支付模式（页面加载后通过 api/config 获取）
@@ -1382,6 +1409,14 @@ function showSuccess(data) {
   if (data.payer) {
     document.getElementById('successPayer').textContent = `付款方: ${data.payer}`;
   }
+
+  // 支付宝环境：原生 toast + 延迟自动关闭回到支付宝
+  if (alipayReady) {
+    alipayToast('支付成功', 'success');
+    setTimeout(function() {
+      closeAlipayWebview();
+    }, 2500);
+  }
 }
 
 // ==================== 重置到输入状态 ====================
@@ -1407,6 +1442,7 @@ function resetToInput() {
 
 // ==================== 错误提示 ====================
 function showError(msg) {
+  if (alipayToast(msg, 'fail')) return;
   const toast = document.getElementById('errorToast');
   toast.textContent = msg;
   toast.classList.add('show');
