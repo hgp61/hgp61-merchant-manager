@@ -2124,8 +2124,10 @@
       <div class="sec-card">
         <div class="sec-card-title">收款码修复</div>
         <div class="sec-card-desc">将收款码转为支付宝无感入口码，扫码不弹安全提示</div>
-        <button class="btn-primary" style="width:100%; padding:12px; font-size:14px; letter-spacing:2px;" onclick="fixMerchantQRCode()">🔧 一键修复收款码</button>
-        <button class="btn-primary" style="width:100%; padding:12px; font-size:14px; letter-spacing:2px; margin-top:8px; background:#3a3a3a; border-color:#4a4a4a;" onclick="resetMerchantQRCode()">↩️ 初始化收款码</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-primary" style="flex:1; padding:12px; font-size:14px; letter-spacing:2px;" onclick="fixMerchantQRCode()">🔧 一键修复</button>
+          <button class="btn-primary" style="flex:1; padding:12px; font-size:14px; letter-spacing:2px; background:#3a3a3a; border-color:#4a4a4a;" onclick="resetMerchantQRCode()">↩️ 初始化</button>
+        </div>
         <div id="fixQrStatus" style="margin-top:12px; font-size:11px; color:rgba(212,175,55,0.5); line-height:1.7; display:none; word-break:break-all;"></div>
       </div>
 
@@ -3877,8 +3879,9 @@ function roundRect(ctx, x, y, w, h, r, fill, stroke) {
   if (stroke) ctx.stroke();
 }
 
-// 商户收款二维码渲染（初始版本：原始HTTPS收银台链接）
+// 商户收款二维码渲染（使用 qrcodejs 前端生成，不依赖外部服务，无缓存问题）
 var _merchantQrDataUrl = '';
+var _merchantQrInstance = null;
 
 function renderMerchantQRCode() {
   var box = document.getElementById('merchantQrCodeBox');
@@ -3887,60 +3890,42 @@ function renderMerchantQRCode() {
   // 显示加载中
   box.innerHTML = '<img style="display:block;width:200px;height:200px;border-radius:8px;" alt="收款二维码" src="data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect fill="#fff" width="200" height="200" rx="8"/><text x="100" y="95" text-anchor="middle" fill="#b8860b" font-size="13" font-family="sans-serif">加载中...</text><text x="100" y="115" text-anchor="middle" fill="#d4af37" font-size="11" font-family="sans-serif">正在生成收款码</text></svg>') + '">';
 
-  // 初始版本：生成原始 HTTPS 收银台链接收款码（修复前的原始收款码）
+  // 初始版本：生成原始 HTTPS 收银台链接收款码
   var cashierUrl = window.location.origin + window.location.pathname.replace(/admin\.html$/, 'cashier.html');
-  var qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=' + encodeURIComponent(cashierUrl);
 
-  var img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.alt = '收款二维码';
+  // 清除旧实例
+  if (_merchantQrInstance) { try { _merchantQrInstance.clear(); } catch(e){} _merchantQrInstance = null; }
 
-  img.onload = function() {
+  setTimeout(function() {
     box.innerHTML = '';
     box.style.position = 'relative';
-    img.style.cssText = 'display:block;width:200px;height:200px;border-radius:8px;';
-    box.appendChild(img);
 
-    // 缓存 dataURL 用于下载功能
-    try {
-      var cv = document.createElement('canvas');
-      cv.width = 400;
-      cv.height = 400;
-      var cctx = cv.getContext('2d');
-      cctx.drawImage(img, 0, 0, 400, 400);
-      _merchantQrDataUrl = cv.toDataURL('image/png');
-    } catch(e) {
-      _merchantQrDataUrl = qrApiUrl;
-    }
+    // 用 qrcodejs 生成黑白二维码（不依赖外部服务，无缓存/CORS问题）
+    _merchantQrInstance = new QRCode(box, {
+      text: cashierUrl,
+      width: 400,
+      height: 400,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
 
-    // 在二维码中心叠加 Logo
-    if (!box.querySelector('.qr-logo-overlay')) {
-      var overlay = document.createElement('div');
-      overlay.className = 'qr-logo-overlay';
-      overlay.innerHTML = '<div class="qr-logo-inner"><img src="logo-pay.png" alt="logo"></div>';
-      box.appendChild(overlay);
-    }
-  };
-
-  img.onerror = function() {
-    box.innerHTML = '';
-    box.style.position = 'relative';
-    var fb = document.createElement('img');
-    fb.src = qrApiUrl;
-    fb.style.cssText = 'display:block;width:200px;height:200px;border-radius:8px;';
-    fb.alt = '收款二维码';
-    box.appendChild(fb);
-    _merchantQrDataUrl = qrApiUrl;
-
-    if (!box.querySelector('.qr-logo-overlay')) {
-      var overlay = document.createElement('div');
-      overlay.className = 'qr-logo-overlay';
-      overlay.innerHTML = '<div class="qr-logo-inner"><img src="logo-pay.png" alt="logo"></div>';
-      box.appendChild(overlay);
-    }
-  };
-
-  img.src = qrApiUrl;
+    // 延迟缓存 dataURL 并叠加 Logo
+    setTimeout(function() {
+      var img = box.querySelector('img');
+      if (img && img.src) { _merchantQrDataUrl = img.src; img.style.width = '200px'; img.style.height = '200px'; }
+      else {
+        var canvas = box.querySelector('canvas');
+        if (canvas) { _merchantQrDataUrl = canvas.toDataURL('image/png'); canvas.style.width = '200px'; canvas.style.height = '200px'; }
+      }
+      if (!box.querySelector('.qr-logo-overlay')) {
+        var overlay = document.createElement('div');
+        overlay.className = 'qr-logo-overlay';
+        overlay.innerHTML = '<div class="qr-logo-inner"><img src="logo-pay.png" alt="logo"></div>';
+        box.appendChild(overlay);
+      }
+    }, 500);
+  }, 100);
 }
 
 // ★ 一键修复收款码：将原始HTTPS收银台链接转为 alipays:// scheme 无感入口码并替换显示
@@ -3950,12 +3935,10 @@ function fixMerchantQRCode() {
 
   var statusEl = document.getElementById('fixQrStatus');
 
-  // 第1步：生成原始收银台链接（与桌面工具输入框内容一致）
+  // 第1步：生成原始收银台链接
   var cashierUrl = window.location.origin + window.location.pathname.replace(/admin\.html$/, 'cashier.html');
   // 第2步：转换为 alipays:// scheme（支付宝扫码不弹"即将离开支付宝"提示）
   var schemeUrl = 'alipays://platformapi/startapp?appId=20000067&url=' + encodeURIComponent(cashierUrl);
-  // 第3步：用 api.qrserver.com 生成黑白二维码（与桌面工具完全一致）
-  var qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=' + encodeURIComponent(schemeUrl);
 
   // 显示修复中状态
   if (statusEl) {
@@ -3966,65 +3949,44 @@ function fixMerchantQRCode() {
   // 显示加载中
   box.innerHTML = '<img style="display:block;width:200px;height:200px;border-radius:8px;" alt="生成中" src="data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect fill="#fff" width="200" height="200" rx="8"/><text x="100" y="100" text-anchor="middle" fill="#b8860b" font-size="14" font-family="sans-serif">修复中...</text></svg>') + '">';
 
-  var img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.alt = '收款二维码';
+  // 清除旧实例
+  if (_merchantQrInstance) { try { _merchantQrInstance.clear(); } catch(e){} _merchantQrInstance = null; }
 
-  img.onload = function() {
+  setTimeout(function() {
     box.innerHTML = '';
     box.style.position = 'relative';
-    img.style.cssText = 'display:block;width:200px;height:200px;border-radius:8px;';
-    box.appendChild(img);
 
-    // 缓存 dataURL 用于下载功能
-    try {
-      var cv = document.createElement('canvas');
-      cv.width = 400;
-      cv.height = 400;
-      var cctx = cv.getContext('2d');
-      cctx.drawImage(img, 0, 0, 400, 400);
-      _merchantQrDataUrl = cv.toDataURL('image/png');
-    } catch(e) {
-      _merchantQrDataUrl = qrApiUrl;
-    }
+    // 用 qrcodejs 生成黑白二维码
+    _merchantQrInstance = new QRCode(box, {
+      text: schemeUrl,
+      width: 400,
+      height: 400,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
 
-    // 在二维码中心叠加 Logo
-    var overlay = document.createElement('div');
-    overlay.className = 'qr-logo-overlay';
-    overlay.innerHTML = '<div class="qr-logo-inner"><img src="logo-pay.png" alt="logo"></div>';
-    box.appendChild(overlay);
+    // 延迟缓存 dataURL 并叠加 Logo
+    setTimeout(function() {
+      var img = box.querySelector('img');
+      if (img && img.src) { _merchantQrDataUrl = img.src; img.style.width = '200px'; img.style.height = '200px'; }
+      else {
+        var canvas = box.querySelector('canvas');
+        if (canvas) { _merchantQrDataUrl = canvas.toDataURL('image/png'); canvas.style.width = '200px'; canvas.style.height = '200px'; }
+      }
+      var overlay = document.createElement('div');
+      overlay.className = 'qr-logo-overlay';
+      overlay.innerHTML = '<div class="qr-logo-inner"><img src="logo-pay.png" alt="logo"></div>';
+      box.appendChild(overlay);
 
-    // 显示修复成功状态（含链接信息供核对）
-    if (statusEl) {
-      statusEl.innerHTML = '<span style="color:#4caf50; font-weight:bold;">✅ 修复完成！收款码已转为无感入口码</span>'
-        + '<br><span style="color:rgba(212,175,55,0.4);">原始链接：</span><span style="color:rgba(212,175,55,0.6);">' + cashierUrl + '</span>'
-        + '<br><span style="color:rgba(212,175,55,0.4);">无感链接：</span><span style="color:rgba(212,175,55,0.6);">' + schemeUrl + '</span>';
-    }
-  };
-
-  img.onerror = function() {
-    // 备用：直接显示远程图片
-    box.innerHTML = '';
-    box.style.position = 'relative';
-    var fb = document.createElement('img');
-    fb.src = qrApiUrl;
-    fb.style.cssText = 'display:block;width:200px;height:200px;border-radius:8px;';
-    fb.alt = '收款二维码';
-    box.appendChild(fb);
-    _merchantQrDataUrl = qrApiUrl;
-
-    var overlay = document.createElement('div');
-    overlay.className = 'qr-logo-overlay';
-    overlay.innerHTML = '<div class="qr-logo-inner"><img src="logo-pay.png" alt="logo"></div>';
-    box.appendChild(overlay);
-
-    if (statusEl) {
-      statusEl.innerHTML = '<span style="color:#ff9800; font-weight:bold;">⚠️ 修复完成（备用模式）</span>'
-        + '<br><span style="color:rgba(212,175,55,0.4);">无感链接：</span><span style="color:rgba(212,175,55,0.6);">' + schemeUrl + '</span>';
-    }
-  };
-
-  img.src = qrApiUrl;
+      // 显示修复成功状态
+      if (statusEl) {
+        statusEl.innerHTML = '<span style="color:#4caf50; font-weight:bold;">✅ 修复完成！收款码已转为无感入口码</span>'
+          + '<br><span style="color:rgba(212,175,55,0.4);">原始链接：</span><span style="color:rgba(212,175,55,0.6);">' + cashierUrl + '</span>'
+          + '<br><span style="color:rgba(212,175,55,0.4);">无感链接：</span><span style="color:rgba(212,175,55,0.6);">' + schemeUrl + '</span>';
+      }
+    }, 500);
+  }, 100);
 }
 
 // ★ 初始化恢复：回退到初始版本的收款码（原始HTTPS收银台链接）
@@ -4036,7 +3998,6 @@ function resetMerchantQRCode() {
 
   // 恢复为原始 HTTPS 收银台链接
   var cashierUrl = window.location.origin + window.location.pathname.replace(/admin\.html$/, 'cashier.html');
-  var qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=' + encodeURIComponent(cashierUrl);
 
   // 显示恢复中状态
   if (statusEl) {
@@ -4047,63 +4008,43 @@ function resetMerchantQRCode() {
   // 显示加载中
   box.innerHTML = '<img style="display:block;width:200px;height:200px;border-radius:8px;" alt="收款二维码" src="data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect fill="#fff" width="200" height="200" rx="8"/><text x="100" y="100" text-anchor="middle" fill="#b8860b" font-size="14" font-family="sans-serif">恢复中...</text></svg>') + '">';
 
-  var img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.alt = '收款二维码';
+  // 清除旧实例
+  if (_merchantQrInstance) { try { _merchantQrInstance.clear(); } catch(e){} _merchantQrInstance = null; }
 
-  img.onload = function() {
+  setTimeout(function() {
     box.innerHTML = '';
     box.style.position = 'relative';
-    img.style.cssText = 'display:block;width:200px;height:200px;border-radius:8px;';
-    box.appendChild(img);
 
-    // 缓存 dataURL 用于下载功能
-    try {
-      var cv = document.createElement('canvas');
-      cv.width = 400;
-      cv.height = 400;
-      var cctx = cv.getContext('2d');
-      cctx.drawImage(img, 0, 0, 400, 400);
-      _merchantQrDataUrl = cv.toDataURL('image/png');
-    } catch(e) {
-      _merchantQrDataUrl = qrApiUrl;
-    }
+    // 用 qrcodejs 生成黑白二维码（与初始渲染完全一致）
+    _merchantQrInstance = new QRCode(box, {
+      text: cashierUrl,
+      width: 400,
+      height: 400,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
 
-    // 在二维码中心叠加 Logo
-    var overlay = document.createElement('div');
-    overlay.className = 'qr-logo-overlay';
-    overlay.innerHTML = '<div class="qr-logo-inner"><img src="logo-pay.png" alt="logo"></div>';
-    box.appendChild(overlay);
+    // 延迟缓存 dataURL 并叠加 Logo
+    setTimeout(function() {
+      var img = box.querySelector('img');
+      if (img && img.src) { _merchantQrDataUrl = img.src; img.style.width = '200px'; img.style.height = '200px'; }
+      else {
+        var canvas = box.querySelector('canvas');
+        if (canvas) { _merchantQrDataUrl = canvas.toDataURL('image/png'); canvas.style.width = '200px'; canvas.style.height = '200px'; }
+      }
+      var overlay = document.createElement('div');
+      overlay.className = 'qr-logo-overlay';
+      overlay.innerHTML = '<div class="qr-logo-inner"><img src="logo-pay.png" alt="logo"></div>';
+      box.appendChild(overlay);
 
-    // 显示恢复成功状态
-    if (statusEl) {
-      statusEl.innerHTML = '<span style="color:#4caf50; font-weight:bold;">✅ 已恢复初始收款码</span>'
-        + '<br><span style="color:rgba(212,175,55,0.4);">链接：</span><span style="color:rgba(212,175,55,0.6);">' + cashierUrl + '</span>';
-    }
-  };
-
-  img.onerror = function() {
-    box.innerHTML = '';
-    box.style.position = 'relative';
-    var fb = document.createElement('img');
-    fb.src = qrApiUrl;
-    fb.style.cssText = 'display:block;width:200px;height:200px;border-radius:8px;';
-    fb.alt = '收款二维码';
-    box.appendChild(fb);
-    _merchantQrDataUrl = qrApiUrl;
-
-    var overlay = document.createElement('div');
-    overlay.className = 'qr-logo-overlay';
-    overlay.innerHTML = '<div class="qr-logo-inner"><img src="logo-pay.png" alt="logo"></div>';
-    box.appendChild(overlay);
-
-    if (statusEl) {
-      statusEl.innerHTML = '<span style="color:#ff9800; font-weight:bold;">⚠️ 已恢复初始收款码（备用模式）</span>'
-        + '<br><span style="color:rgba(212,175,55,0.4);">链接：</span><span style="color:rgba(212,175,55,0.6);">' + cashierUrl + '</span>';
-    }
-  };
-
-  img.src = qrApiUrl;
+      // 显示恢复成功状态
+      if (statusEl) {
+        statusEl.innerHTML = '<span style="color:#4caf50; font-weight:bold;">✅ 已恢复初始收款码</span>'
+          + '<br><span style="color:rgba(212,175,55,0.4);">链接：</span><span style="color:rgba(212,175,55,0.6);">' + cashierUrl + '</span>';
+      }
+    }, 500);
+  }, 100);
 }
 
 // 下载商户收款二维码图片（生成完整面板截图，参考图布局，2K分辨率）
