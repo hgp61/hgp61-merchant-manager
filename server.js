@@ -1227,7 +1227,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
 
   if (m.type === 'uid' || m.type === 'uid-simple') {
     // ===== UID / UID 简易支付 收银台 =====
-    const alipaysUrl = `alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=${encodeURIComponent(JSON.stringify({ s: 'money', u: m.alipayUid, a: amtNum.toFixed(2), m: subject }))}`;
+    const alipaysUrl = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(JSON.stringify({ s: 'money', u: m.alipayUid, a: amtNum.toFixed(2), m: subject }))}`;
 
     if (m.type === 'uid-simple') {
       // UID 简易支付: 直接返回 alipays:// 链接，前端直接跳转，不生成二维码
