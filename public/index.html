@@ -212,6 +212,11 @@
     color: #3498db;
     border: 1px solid rgba(52,152,219,0.3);
   }
+  .type-badge.type-face-dynamic {
+    background: rgba(155,89,182,0.15);
+    color: #9b59b6;
+    border: 1px solid rgba(155,89,182,0.3);
+  }
 
   .action-btns { display: flex; gap: 8px; }
   .btn-login-row {
@@ -350,10 +355,10 @@
     margin-bottom: 28px;
   }
   .type-cards {
-    display: flex; gap: 16px;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
   }
   .type-card {
-    flex: 1;
+    min-width: 0;
     background: rgba(255,255,255,0.02);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -695,8 +700,14 @@
       </div>
       <div class="type-card" onclick="selectFaceType()">
         <div class="type-card-icon">💳</div>
-        <div class="type-card-name">当面付进件</div>
-        <div class="type-card-desc">需提供 APPID + 双密钥<br>可生成动态码<br>支付即刻失效</div>
+        <div class="type-card-name">当面付直付</div>
+        <div class="type-card-desc">需提供 APPID + 双密钥<br>输入金额直接直付</div>
+        <div class="gold-dot"></div>
+      </div>
+      <div class="type-card" onclick="selectFaceDynamicType()">
+        <div class="type-card-icon">🔄</div>
+        <div class="type-card-name">当面付动态码</div>
+        <div class="type-card-desc">需提供 APPID + 双密钥<br>输入金额即可生成动态码<br>动态支付即付即失效</div>
         <div class="gold-dot"></div>
       </div>
     </div>
@@ -707,7 +718,7 @@
 <div class="modal-overlay" id="faceModal">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">增加商户 · 当面付</div>
+      <div class="modal-title" id="faceModalTitle">增加商户 · 当面付直付</div>
       <button class="modal-close" onclick="closeAddModal()">&times;</button>
     </div>
     <div class="modal-body">
@@ -987,12 +998,15 @@ function renderMerchants() {
     const keyClass = m.keyType === 'PKCS8' ? 'pkcs8' : 'pkcs1';
     const isUid = m.type === 'uid';
     const isUidSimple = m.type === 'uid-simple';
-    const isFace = m.type === 'face';
-    let typeLabel = '当面付';
+    const isFace = m.type === 'face2face' || m.type === 'face';
+    const isFaceDynamic = m.type === 'face2face-dynamic';
+    let typeLabel = '当面付直付';
     let typeBadgeClass = 'type-face';
     if (isUid) { typeLabel = 'UID固码'; typeBadgeClass = 'type-uid'; }
     if (isUidSimple) { typeLabel = 'UID直付'; typeBadgeClass = 'type-uid-simple'; }
+    if (isFaceDynamic) { typeLabel = '当面付动态码'; typeBadgeClass = 'type-face-dynamic'; }
     const idLabel = (isUid || isUidSimple) ? maskString(m.alipayUid || '') : maskString(m.appId || '');
+    const showKeyBadge = isFace || isFaceDynamic;
     const isEnabled = m.enabled !== false; // default true
     return `
       <tr>
@@ -1000,7 +1014,7 @@ function renderMerchants() {
         <td><span class="type-badge ${typeBadgeClass}">${typeLabel}</span></td>
         <td class="merchant-appid">${escapeHtml(idLabel)}</td>
         <td class="merchant-phone">${escapeHtml(m.phone || '')}</td>
-        <td>${isUid ? '<span style="color:var(--text-dim);font-size:12px;">—</span>' : `<span class="key-badge ${keyClass}">${m.keyType}</span>`}</td>
+        <td>${showKeyBadge ? `<span class="key-badge ${keyClass}">${m.keyType}</span>` : '<span style="color:var(--text-dim);font-size:12px;">—</span>'}</td>
         <td class="merchant-date">${dateStr}</td>
         <td><label class="merchant-toggle"><input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleMerchantEnabled('${m.id}', this.checked)"><span class="toggle-slider"></span></label></td>
         <td>
@@ -1045,6 +1059,7 @@ function maskPrivateKey(str) {
 
 // ===== 进件类型选择 =====
 let currentUidAddType = 'uid'; // 'uid' or 'uid-simple'
+let currentFaceType = 'face2face'; // 'face2face' or 'face2face-dynamic'
 
 function openAddModal() {
   document.getElementById('typeSelectModal').classList.add('show');
@@ -1073,8 +1088,23 @@ function selectUidSimpleType() {
 }
 
 function selectFaceType() {
+  currentFaceType = 'face2face';
   document.getElementById('typeSelectModal').classList.remove('show');
   document.getElementById('faceModal').classList.add('show');
+  document.getElementById('faceModalTitle').textContent = '增加商户 · 当面付直付';
+  document.getElementById('inputMerchantName').value = '';
+  document.getElementById('inputPhone').value = '';
+  document.getElementById('inputAppId').value = '';
+  document.getElementById('inputPrivateKey').value = '';
+  document.getElementById('inputAlipayPublicKey').value = '';
+  setTimeout(() => document.getElementById('inputMerchantName').focus(), 100);
+}
+
+function selectFaceDynamicType() {
+  currentFaceType = 'face2face-dynamic';
+  document.getElementById('typeSelectModal').classList.remove('show');
+  document.getElementById('faceModal').classList.add('show');
+  document.getElementById('faceModalTitle').textContent = '增加商户 · 当面付动态码';
   document.getElementById('inputMerchantName').value = '';
   document.getElementById('inputPhone').value = '';
   document.getElementById('inputAppId').value = '';
@@ -1116,7 +1146,7 @@ async function submitFaceMerchant() {
     const res = await fetch('/api/merchants', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ merchantName, phone, appId, privateKey, alipayPublicKey, keyType }),
+      body: JSON.stringify({ merchantName, phone, appId, privateKey, alipayPublicKey, keyType, type: currentFaceType }),
     });
     const json = await res.json();
 
@@ -1258,10 +1288,12 @@ async function openMerchantDetail(id) {
 
     const isUid = d.type === 'uid';
     const isUidSimple = d.type === 'uid-simple';
-    const isFace = d.type === 'face';
-    let typeDisplay = '当面付';
+    const isFace = d.type === 'face2face' || d.type === 'face';
+    const isFaceDynamic = d.type === 'face2face-dynamic';
+    let typeDisplay = '当面付直付';
     if (isUid) typeDisplay = 'UID固码';
     if (isUidSimple) typeDisplay = 'UID直付';
+    if (isFaceDynamic) typeDisplay = '当面付动态码';
     const grid = document.getElementById('detailGrid');
     let html = `
       <div class="detail-item detail-full">

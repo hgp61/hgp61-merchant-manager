@@ -1020,7 +1020,7 @@
     <button class="pay-btn" id="payBtn" onclick="createQRCode()">
       生成收款码
     </button>
-    <p class="pay-hint">点击生成支付宝收款二维码，用户扫码支付</p>
+    <p class="pay-hint" id="payHint">点击生成支付宝收款二维码，用户扫码支付</p>
   </div>
 
   <!-- 支付等待/处理区域 -->
@@ -1148,6 +1148,7 @@ let currentCategory = '游戏充值';
 let cdOpen = false;
 let limitConfig = {};  // 从 /api/limits 拉取的限额配置
 let mgrConfig = { enabled: true, mgrMinAmount: null, mgrMaxAmount: null };  // 从 /api/config 拉取的管理系统配置
+let merchantType = 'face2face';  // face2face=当面付直付，face2face-dynamic=当面付动态码
 
 // ==================== 自定义下拉框 ====================
 function toggleCategoryDropdown(e) {
@@ -1232,6 +1233,7 @@ async function createQRCode() {
   }
 
   const payBtn = document.getElementById('payBtn');
+  const isDynamic = merchantType === 'face2face-dynamic';
   payBtn.disabled = true;
   payBtn.textContent = '生成中...';
 
@@ -1250,8 +1252,9 @@ async function createQRCode() {
       currentOutTradeNo = data.out_trade_no;
       lastQrImage = data.qr_image || '';
 
-      // 支付宝 webview 内：直接跳转支付链接，不显示二维码
-      if (isInAlipay && data.qr_code) {
+      // 当面付直付：支付宝 webview 内直接跳转支付链接
+      // 当面付动态码：始终显示二维码，不自动跳转
+      if (!isDynamic && isInAlipay && data.qr_code) {
         alipayToast('正在跳转支付宝付款...');
         // 短暂延迟确保 toast 显示
         setTimeout(function() {
@@ -1266,20 +1269,20 @@ async function createQRCode() {
     } else if (data.code === 'ALIPAY_ERROR') {
       showAlipayError(data.alipay_code, data.alipay_sub_code, data.alipay_sub_msg, data.alipay_msg);
       payBtn.disabled = false;
-      payBtn.textContent = '生成收款码';
+      payBtn.textContent = isDynamic ? '生成收款码' : '立即支付';
     } else if (data.code === 'SDK_ERROR') {
       showSdkError(data.message || '支付宝 SDK 未初始化');
       payBtn.disabled = false;
-      payBtn.textContent = '生成收款码';
+      payBtn.textContent = isDynamic ? '生成收款码' : '立即支付';
     } else {
       showError(data.message || '生成收款码失败');
       payBtn.disabled = false;
-      payBtn.textContent = '生成收款码';
+      payBtn.textContent = isDynamic ? '生成收款码' : '立即支付';
     }
   } catch (err) {
     showError('网络错误：' + err.message);
     payBtn.disabled = false;
-    payBtn.textContent = '生成收款码';
+    payBtn.textContent = isDynamic ? '生成收款码' : '立即支付';
   }
 }
 
@@ -1541,10 +1544,26 @@ async function fetchMgrConfig() {
       mgrConfig.enabled = data.data.enabled !== false;
       mgrConfig.mgrMinAmount = data.data.mgrMinAmount !== undefined ? data.data.mgrMinAmount : null;
       mgrConfig.mgrMaxAmount = data.data.mgrMaxAmount !== undefined ? data.data.mgrMaxAmount : null;
+      if (data.data.type) merchantType = data.data.type;
+      updatePayButtonText();
     }
   } catch (e) {}
 }
 fetchMgrConfig();
+
+function updatePayButtonText() {
+  const btn = document.getElementById('payBtn');
+  const hint = document.getElementById('payHint');
+  if (!btn) return;
+  if (merchantType === 'face2face-dynamic') {
+    btn.textContent = '生成收款码';
+    if (hint) hint.textContent = '点击生成固定金额收款码，支付后即刻失效';
+  } else {
+    btn.textContent = '立即支付';
+    if (hint) hint.textContent = '点击立即发起支付宝支付';
+  }
+}
+updatePayButtonText();
 
 </script>
 </body>

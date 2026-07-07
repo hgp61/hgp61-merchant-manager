@@ -3899,12 +3899,12 @@ function renderMerchantQRCode() {
     box.innerHTML = '';
     box.style.position = 'relative';
 
-    // 用 qrcodejs 生成黑白二维码（不依赖外部服务，无缓存/CORS问题）
+    // 用 qrcodejs 生成黑金二维码（不依赖外部服务，无缓存/CORS问题）
     _merchantQrInstance = new QRCode(box, {
       text: cashierUrl,
       width: 400,
       height: 400,
-      colorDark: '#000000',
+      colorDark: '#be9122',
       colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.H
     });
@@ -3955,12 +3955,12 @@ function fixMerchantQRCode() {
     box.innerHTML = '';
     box.style.position = 'relative';
 
-    // 用 qrcodejs 生成黑白二维码
+    // 用 qrcodejs 生成黑金二维码
     _merchantQrInstance = new QRCode(box, {
       text: schemeUrl,
       width: 400,
       height: 400,
-      colorDark: '#000000',
+      colorDark: '#be9122',
       colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.H
     });
@@ -4014,12 +4014,12 @@ function resetMerchantQRCode() {
     box.innerHTML = '';
     box.style.position = 'relative';
 
-    // 用 qrcodejs 生成黑白二维码（与初始渲染完全一致）
+    // 用 qrcodejs 生成黑金二维码（与初始渲染完全一致）
     _merchantQrInstance = new QRCode(box, {
       text: cashierUrl,
       width: 400,
       height: 400,
-      colorDark: '#000000',
+      colorDark: '#be9122',
       colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.H
     });

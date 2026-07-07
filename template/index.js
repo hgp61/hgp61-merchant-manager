@@ -76,6 +76,9 @@ const CONFIG = {
 
   // 商户登录密码（由商户管理系统注入，默认 yy123456）
   merchantPassword: 'yy123456',
+
+  // 商户类型（由商户管理系统注入）：face2face=当面付直付，face2face-dynamic=当面付动态码
+  merchantType: 'face2face',
 };
 
 // 允许登录的手机号集合（支持商户管理系统动态同步新增手机号）
@@ -1063,6 +1066,19 @@ function loadLimits() {
 
 app.get('/api/limits', (req, res) => {
   res.json({ code: 'OK', success: true, config: limitsConfig });
+});
+
+// 获取商户类型与管理系统配置（收银台用）
+app.get('/api/config', (req, res) => {
+  res.json({
+    code: 'OK',
+    data: {
+      type: CONFIG.merchantType || 'face2face',
+      enabled: true,
+      mgrMinAmount: null,
+      mgrMaxAmount: null,
+    }
+  });
 });
 
 app.post('/api/limits', express.json(), async (req, res) => {

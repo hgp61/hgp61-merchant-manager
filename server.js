@@ -493,6 +493,9 @@ function injectConfig(templateIndexJs, config) {
   if (config.merchantPassword) {
     result = result.replace(/merchantPassword:\s*['"].*?['"],/, `merchantPassword: '${config.merchantPassword}',`);
   }
+  if (config.merchantType) {
+    result = result.replace(/merchantType:\s*['"].*?['"],/, `merchantType: '${config.merchantType}',`);
+  }
   return result;
 }
 
@@ -500,6 +503,17 @@ function generateMerchantZip(config) {
   const zip = new AdmZip();
   const templateIndex = fs.readFileSync(path.join(TEMPLATE_DIR, 'index.js'), 'utf-8');
   const injectedIndex = injectConfig(templateIndex, config);
+  zip.addFile('index.js', Buffer.from(injectedIndex, 'utf-8'));
+  ['cashier.html', 'admin.html', 'logo-pay.png', 'package.json'].forEach(f => {
+    zip.addFile(f, fs.readFileSync(path.join(TEMPLATE_DIR, f)));
+  });
+  return zip.toBuffer();
+}
+
+function generateFaceDynamicMerchantZip(config) {
+  const zip = new AdmZip();
+  const templateIndex = fs.readFileSync(path.join(TEMPLATE_DIR, 'index.js'), 'utf-8');
+  const injectedIndex = injectConfig(templateIndex, { ...config, merchantType: 'face2face-dynamic' });
   zip.addFile('index.js', Buffer.from(injectedIndex, 'utf-8'));
   ['cashier.html', 'admin.html', 'logo-pay.png', 'package.json'].forEach(f => {
     zip.addFile(f, fs.readFileSync(path.join(TEMPLATE_DIR, f)));
@@ -592,7 +606,8 @@ app.get('/api/stats', requireAuth, (req, res) => {
 });
 
 app.post('/api/merchants', requireAuth, (req, res) => {
-  const { merchantName, phone, appId, privateKey, alipayPublicKey, keyType: reqKeyType } = req.body;
+  const { merchantName, phone, appId, privateKey, alipayPublicKey, keyType: reqKeyType, type: reqType } = req.body;
+  const faceType = reqType === 'face2face-dynamic' ? 'face2face-dynamic' : 'face2face';
   if (!phone || !/^1\d{10}$/.test(phone.trim())) {
     return res.json({ code: 'FAIL', message: '请输入有效的 11 位手机号' });
   }
@@ -643,7 +658,7 @@ app.post('/api/merchants', requireAuth, (req, res) => {
   const alipayMerchantName = (merchantName || '').trim();
 
   const merchant = {
-    id, type: 'face2face',
+    id, type: faceType,
     merchantName: merchantName || '未命名商户',
     phone: phone.trim(),
     password: hashPwd(defaultPassword),
@@ -655,14 +670,18 @@ app.post('/api/merchants', requireAuth, (req, res) => {
   };
 
   try {
-    const zipBuffer = generateMerchantZip({
+    const zipConfig = {
       appId: appId.trim(),
       privateKey: trimmedKey,
       alipayPublicKey: alipayPublicKey.trim(),
       merchantName: alipayMerchantName,
       merchantPhone: phone.trim(),
       merchantPassword: defaultPassword,
-    });
+      merchantType: faceType,
+    };
+    const zipBuffer = faceType === 'face2face-dynamic'
+      ? generateFaceDynamicMerchantZip(zipConfig)
+      : generateMerchantZip(zipConfig);
     fs.writeFileSync(path.join(DATA_DIR, `${fileName}.zip`), zipBuffer);
     merchant.zipGenerated = true;
   } catch (e) {
@@ -887,6 +906,7 @@ app.post('/api/merchants/:id/deploy', requireAuth, async (req, res) => {
       merchantName: merchant.merchantName || '',
       merchantPhone: merchant.phone || '',
       merchantPassword: 'yy123456',
+      merchantType: merchant.type || 'face2face',
     };
 
     const injectedIndex = injectConfig(templateIndex, config);
@@ -1695,7 +1715,7 @@ app.get('/m/:id/api/config', (req, res) => {
       hasUid: !!m.alipayUid,
       hasPaymentApi: false,
       merchantName: m.merchantName || '未配置',
-      type: m.type || 'face',
+      type: (m.type === 'face' ? 'face2face' : (m.type || 'face2face')),
       uid: m.alipayUid || '',
       enabled: m.enabled !== false, // 默认 true
       mgrMinAmount: m.mgrMinAmount !== undefined ? m.mgrMinAmount : null,
