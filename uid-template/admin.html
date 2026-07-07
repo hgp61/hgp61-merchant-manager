@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>订单管理 - 黄桂鹏商户后台</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -3891,6 +3894,12 @@ function renderMerchantQRCode() {
     img.style.cssText = 'display:block;width:200px;height:200px;border-radius:8px;';
     box.appendChild(img);
 
+    // 调试标识：显示二维码类型
+    var dbg = document.createElement('div');
+    dbg.style.cssText = 'text-align:center;font-size:11px;color:#d4af37;margin-top:6px;font-weight:bold;';
+    dbg.textContent = '✅ alipays:// 无感入口码';
+    box.appendChild(dbg);
+
     // 缓存用于下载功能（用 canvas 转 dataURL）
     try {
       var cv = document.createElement('canvas');
@@ -3922,6 +3931,12 @@ function renderMerchantQRCode() {
     fb.alt = '收款二维码';
     box.appendChild(fb);
     _merchantQrDataUrl = qrApiUrl;
+
+    // 调试标识
+    var dbg = document.createElement('div');
+    dbg.style.cssText = 'text-align:center;font-size:11px;color:#d4af37;margin-top:6px;font-weight:bold;';
+    dbg.textContent = '✅ alipays:// 无感入口码(备用)';
+    box.appendChild(dbg);
 
     if (!box.querySelector('.qr-logo-overlay')) {
       var overlay = document.createElement('div');
