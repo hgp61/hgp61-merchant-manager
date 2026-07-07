@@ -1195,7 +1195,7 @@ async function createQRCode() {
     return;
   }
 
-  // ===== UID 简易支付：直接跳 /pay 页面，让服务端 handleAlipayRedirect 处理跳转 =====
+  // ===== UID 简易支付：前端直接跳转 alipays:// scheme，不经过服务端 302 =====
   if (IS_SIMPLE && MERCHANT_UID) {
     const payBtn = document.getElementById('payBtn');
     payBtn.disabled = true;
@@ -1205,17 +1205,18 @@ async function createQRCode() {
     fetch(`${API_BASE}cashier/qrcode`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount, subject, base_url: window.location.origin })
+      body: JSON.stringify({ amount, subject })
     }).then(res => res.json()).then(data => {
       if (data.code === 'OK') {
         currentOutTradeNo = data.out_trade_no;
       }
     }).catch(() => {});
 
-    // 直接跳转到 /pay 页面，服务端 handleAlipayRedirect 根据 UA 处理：
-    // 支付宝内置浏览器 → 302 跳 alipays://（可靠）
-    // 其他浏览器 → 返回 pay/index.html，用户点击按钮跳转
-    window.location.href = `${API_BASE}pay?amount=${encodeURIComponent(amount)}&uid=${encodeURIComponent(MERCHANT_UID)}&memo=${encodeURIComponent(subject)}`;
+    // 前端直接构造 alipays:// scheme 跳转，不经过 /pay 路由的 302 重定向
+    // 支付宝 webview 内 302 到 alipays:// 可能被拦截，前端 JS 跳转更可靠
+    const biz = JSON.stringify({ s: 'money', u: MERCHANT_UID, a: parseFloat(amount).toFixed(2), m: subject });
+    const alipaysUrl = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + encodeURIComponent(biz);
+    window.location.href = alipaysUrl;
 
     return;
   }
@@ -1233,8 +1234,9 @@ async function createQRCode() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         amount,
-        subject,
-        base_url: window.location.origin
+        subject
+        // 不传 base_url：让二维码内容直接是 alipays:// scheme
+        // 支付宝扫码后直接跳转支付页面，不经过 HTTPS 中转和 302 重定向
       })
     });
     const data = await res.json();
