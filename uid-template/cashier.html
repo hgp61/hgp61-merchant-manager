@@ -937,42 +937,8 @@
     .qr-img { width: 220px; height: 220px; }
   }
 </style>
-<script src="https://gw.alipayobjects.com/as/g/h5-lib/alipayjsbridge/2.9.2/alipayjsbridge.js"></script>
 </head>
 <body>
-  <!-- 非支付宝浏览器提示页（默认隐藏） -->
-  <div id="alipayOnlyTip" style="display:none; position:fixed; inset:0; z-index:9999; background:#070707; color:#d4af37; flex-direction:column; align-items:center; justify-content:center; padding:24px;">
-    <div style="text-align:center; max-width:320px;">
-      <div style="font-size:48px; margin-bottom:20px;">📱</div>
-      <div style="font-size:20px; font-weight:800; letter-spacing:2px; margin-bottom:12px; background:linear-gradient(135deg,#f0d77a,#d4af37); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">请使用支付宝扫码</div>
-      <div style="font-size:13px; color:rgba(255,255,255,0.35); line-height:1.8;">
-        为保护交易安全<br>请在支付宝中扫描此二维码
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // UA 检测：非支付宝浏览器访问时显示提示页
-    (function() {
-      var ua = navigator.userAgent || '';
-      var isAlipay = /AlipayClient|AlipayDefined|AliApp/i.test(ua);
-      if (!isAlipay) {
-        // 显示提示页，隐藏页面其他内容
-        document.getElementById('alipayOnlyTip').style.display = 'flex';
-        // 隐藏 body 里除了提示页以外的所有直接子元素
-        var bodyKids = document.body.children;
-        for (var i = 0; i < bodyKids.length; i++) {
-          if (bodyKids[i].id !== 'alipayOnlyTip') {
-            bodyKids[i].style.display = 'none';
-          }
-        }
-        // 停止后续执行
-        window.__ALIPAY_ONLY__ = true;
-      }
-    })();
-  </script>
-
-  <!-- 正常收银台内容（支付宝浏览器才显示） -->
 
 <div class="error-toast" id="errorToast"></div>
 
@@ -1093,119 +1059,6 @@
   <div class="cd-option" onclick="selectCategory('五金器械')">五金器械</div>
   <div class="cd-option" onclick="selectCategory('软件定制服务')">软件定制服务</div>
 </div>
-
-<script>
-// ==================== 支付宝 JSSDK ====================
-let alipayReady = false;
-document.addEventListener('AlipayJSBridgeReady', function() {
-  alipayReady = true;
-}, false);
-
-// 支付宝原生 Toast 提示
-function alipayToast(msg, type) {
-  if (alipayReady && window.AlipayJSBridge) {
-    AlipayJSBridge.call('toast', {
-      content: msg || '',
-      type: type || 'none',
-      duration: 2000
-    });
-    return true;
-  }
-  return false;
-}
-
-// 关闭 webview 回到支付宝
-function closeAlipayWebview() {
-  if (alipayReady && window.AlipayJSBridge) {
-    AlipayJSBridge.call('closeWebview');
-  }
-}
-
-// 检测是否在支付宝 webview 内
-function isInAlipayWebView() {
-  var ua = navigator.userAgent || '';
-  return /AlipayClient|AlipayDefined|AliApp/i.test(ua);
-}
-
-// 支付宝内跳转支付：显示跳转中状态，然后跳转到 qr_code URL
-function redirectToAlipayPay(qrCodeUrl, outTradeNo, amount, subject) {
-  // 保存订单信息，用于返回后恢复轮询
-  sessionStorage.setItem('pendingPayment', JSON.stringify({
-    outTradeNo: outTradeNo,
-    amount: amount,
-    subject: subject,
-    timestamp: Date.now()
-  }));
-
-  // 显示跳转中界面
-  document.getElementById('inputSection').style.display = 'none';
-  document.getElementById('btnSection').style.display = 'none';
-  document.getElementById('paySection').classList.add('show');
-  document.querySelector('.merchant-header').classList.add('compact');
-
-  document.getElementById('payTitle').textContent = '正在跳转支付';
-  document.getElementById('paySubtitle').textContent = '请稍候，正在打开支付宝付款页面';
-  document.getElementById('payAmount').textContent = `¥${parseFloat(amount).toFixed(2)}`;
-  document.getElementById('paySubject').textContent = subject;
-
-  var qrBox = document.querySelector('#paySection .qr-box');
-  qrBox.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(212,175,55,0.8);font-size:14px;">跳转中...</div>';
-  qrBox.style.background = 'transparent';
-  qrBox.style.borderColor = 'transparent';
-
-  document.getElementById('payTip').innerHTML = '<span class="dot"></span> 正在跳转支付宝付款页面...';
-  document.getElementById('payTip').className = 'qr-tip';
-
-  document.querySelector('#paySection .btn-group').innerHTML = '';
-
-  // 延迟跳转，让用户看到提示
-  setTimeout(function() {
-    window.location.href = qrCodeUrl;
-  }, 1200);
-}
-
-// 页面恢复（从支付宝付款页返回时），恢复轮询
-window.addEventListener('pageshow', function(event) {
-  var pending = sessionStorage.getItem('pendingPayment');
-  if (!pending) return;
-  
-  var order = JSON.parse(pending);
-  // 超过 30 分钟的订单不恢复
-  if (Date.now() - order.timestamp > 30 * 60 * 1000) {
-    sessionStorage.removeItem('pendingPayment');
-    return;
-  }
-
-  // 恢复订单状态
-  currentOutTradeNo = order.outTradeNo;
-  lastAmount = order.amount;
-  lastSubject = order.subject;
-
-  // 显示等待确认界面
-  document.getElementById('inputSection').style.display = 'none';
-  document.getElementById('btnSection').style.display = 'none';
-  document.getElementById('paySection').classList.add('show');
-  document.querySelector('.merchant-header').classList.add('compact');
-
-  document.getElementById('payTitle').textContent = '确认支付结果';
-  document.getElementById('paySubtitle').textContent = '正在检查支付状态...';
-  document.getElementById('payAmount').textContent = `¥${parseFloat(order.amount).toFixed(2)}`;
-  document.getElementById('paySubject').textContent = order.subject;
-
-  var qrBox = document.querySelector('#paySection .qr-box');
-  qrBox.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(212,175,55,0.8);font-size:14px;">查询中...</div>';
-  qrBox.style.background = 'transparent';
-  qrBox.style.borderColor = 'transparent';
-
-  document.getElementById('payTip').innerHTML = '<span class="dot"></span> 正在检查支付状态...';
-  document.getElementById('payTip').className = 'qr-tip';
-
-  document.querySelector('#paySection .btn-group').innerHTML = 
-    '<button class="cancel-btn" onclick="resetToInput()">返回重新输入</button>';
-
-  // 立即查一次 + 开始轮询
-  startPolling();
-});
 
 // ==================== 配置 ====================
 const API_BASE = '';
@@ -1389,12 +1242,6 @@ async function createQRCode() {
       currentOutTradeNo = data.out_trade_no;
       lastQrImage = data.qr_image || '';
 
-      // 支付宝 webview 内：直接跳转到支付链接（用户自己手机操作，不需要显示二维码）
-      if (isInAlipayWebView() && data.qr_code) {
-        redirectToAlipayPay(data.qr_code, data.out_trade_no, data.amount, data.subject);
-        return;
-      }
-
       showQRCode(data);
       startPolling();
     } else if (data.code === 'ALIPAY_ERROR') {
@@ -1502,14 +1349,6 @@ function showSuccess(data) {
   if (data.payer) {
     document.getElementById('successPayer').textContent = `付款方: ${data.payer}`;
   }
-
-  // 支付宝环境：原生 toast + 延迟自动关闭回到支付宝
-  if (alipayReady) {
-    alipayToast('支付成功', 'success');
-    setTimeout(function() {
-      closeAlipayWebview();
-    }, 2500);
-  }
 }
 
 // ==================== 重置到输入状态 ====================
@@ -1535,7 +1374,6 @@ function resetToInput() {
 
 // ==================== 错误提示 ====================
 function showError(msg) {
-  if (alipayToast(msg, 'fail')) return;
   const toast = document.getElementById('errorToast');
   toast.textContent = msg;
   toast.classList.add('show');
