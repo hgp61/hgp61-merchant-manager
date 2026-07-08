@@ -2771,7 +2771,7 @@ function renderOrders() {
         <td class="order-no-cell" title="${o.tradeNo || o.outTradeNo}">${o.tradeNo || o.outTradeNo}</td>
         <td class="amount-cell">${fmtAmount(parseFloat(o.amount))}</td>
         <td>支付宝扫码</td>
-        <td><span class="status-badge ${statusInfo.cls}">${statusInfo.text}</span>${o.autoConfirmed ? '<span class="auto-badge" title="账单API自动确认">自动</span>' : ''}</td>
+        <td><span class="status-badge ${statusInfo.cls}">${statusInfo.text}</span>${o.autoConfirmed ? '<span class="auto-badge" title="' + (o.confirmMethod === 'trade_query' ? 'trade.query实时确认' : '账单API匹配确认') + '">自动</span>' : ''}</td>
         <td class="date-cell">
           <span class="date-row"><span class="date-label">创建</span>${createTime}</span>
           ${reportedTime ? `<span class="date-row"><span class="date-label">报告</span>${reportedTime}</span>` : ''}

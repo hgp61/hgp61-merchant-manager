@@ -126,8 +126,8 @@ if (AlipaySdk && CONFIG.appId && CONFIG.privateKey) {
   }
 }
 
-/** 正在轮询的订单 */
-const billPollingJobs = new Map();
+/** 正在自动确认的订单 */
+const autoConfirmJobs = new Map();
 
 function downloadFile(url, maxRedirects) {
   if (maxRedirects === undefined) maxRedirects = 3;
@@ -238,44 +238,185 @@ function matchBillRecord(records, order) {
   return null;
 }
 
-function startBillAutoConfirm(order) {
-  if (!alipaySdk || !AdmZip || !iconv) return;
+/**
+ * 启动自动确认到账（混合策略）
+ * Phase 1: alipay.trade.query 每10秒查询（5分钟，当面付模式秒级确认）
+ * Phase 2: 账单API 每30秒查询（30分钟，UID模式兜底，查今天+昨天账单）
+ * Phase 3: 账单API 每5分钟慢速兜底（2小时，处理账单延迟生成）
+ */
+function startAutoConfirm(order) {
+  if (!alipaySdk) return;
   var outTradeNo = order.outTradeNo;
-  if (billPollingJobs.has(outTradeNo)) return;
+  if (autoConfirmJobs.has(outTradeNo)) return;
 
-  console.log('[账单轮询] 启动自动确认: ' + outTradeNo + ', 金额: ¥' + order.amount);
-  var attempt = 0;
-  var today = new Date();
-  var billDate = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  autoConfirmJobs.set(outTradeNo, { startTime: Date.now(), phase: 1 });
+  console.log('[自动确认] 启动: ' + outTradeNo + ', ¥' + order.amount);
 
-  var timer = setInterval(async function() {
-    attempt++;
+  // ===== Phase 1: alipay.trade.query 快速查询 =====
+  var phase1Attempts = 0;
+  var maxPhase1 = 30; // 30 × 10s = 5分钟
+
+  var phase1Timer = setInterval(async function() {
+    phase1Attempts++;
     var currentOrder = adminOrders.find(function(o) { return o.outTradeNo === outTradeNo; });
     if (!currentOrder || ['paid','confirmed','refunded','partial_refund'].includes(currentOrder.status)) {
-      clearInterval(timer); billPollingJobs.delete(outTradeNo); return;
+      clearInterval(phase1Timer); autoConfirmJobs.delete(outTradeNo); return;
     }
+
     try {
-      var records = await downloadAndParseBill(billDate);
-      console.log('[账单轮询] 第' + attempt + '次查询，' + records.length + ' 条记录');
-      var matched = matchBillRecord(records, currentOrder);
-      if (matched) {
+      var result = await alipaySdk.exec('alipay.trade.query', {
+        bizContent: { out_trade_no: outTradeNo }
+      });
+      var resp = result.alipay_trade_query_response || result;
+      var tradeStatus = resp.tradeStatus || resp.trade_status;
+      var tradeNo = resp.tradeNo || resp.trade_no;
+
+      if (resp.code === '10000' && (tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED')) {
         currentOrder.status = 'paid';
         currentOrder.paidAt = new Date().toISOString();
-        currentOrder.tradeNo = (matched['支付宝交易号'] || '') + '_BILL_AUTO';
+        currentOrder.tradeNo = tradeNo;
         currentOrder.autoConfirmed = true;
+        currentOrder.confirmMethod = 'trade_query';
         await saveOrders();
         var cached = cashierOrders.get(outTradeNo);
-        if (cached) { cached.status = 'paid'; cached.tradeNo = currentOrder.tradeNo; }
-        console.log('[账单轮询] ✅ 自动确认: ' + outTradeNo + ', ¥' + currentOrder.amount);
-        clearInterval(timer); billPollingJobs.delete(outTradeNo);
-        return;
+        if (cached) { cached.status = 'paid'; cached.tradeNo = tradeNo; }
+        console.log('[自动确认] ✅ trade.query确认: ' + outTradeNo + ', ¥' + currentOrder.amount);
+        clearInterval(phase1Timer); autoConfirmJobs.delete(outTradeNo); return;
       }
-    } catch (e) { console.log('[账单轮询] 第' + attempt + '次失败: ' + e.message); }
-    if (attempt >= 10) {
-      console.log('[账单轮询] 达到最大次数，停止: ' + outTradeNo);
-      clearInterval(timer); billPollingJobs.delete(outTradeNo);
+      // UID模式订单不在交易系统中，trade.query返回"订单不存在"是正常现象
+    } catch (e) {
+      console.log('[自动确认] P1第' + phase1Attempts + '次trade.query异常: ' + e.message);
     }
-  }, 60000);
+
+    if (phase1Attempts >= maxPhase1) {
+      clearInterval(phase1Timer);
+      console.log('[自动确认] Phase 1超时，进入账单轮询: ' + outTradeNo);
+      autoConfirmJobs.get(outTradeNo).phase = 2;
+      if (AdmZip && iconv) {
+        startBillPhase(outTradeNo);
+      } else {
+        console.log('[自动确认] 无账单解析依赖，自动确认不可用: ' + outTradeNo);
+        autoConfirmJobs.delete(outTradeNo);
+      }
+    }
+  }, 10000);
+}
+
+/**
+ * Phase 2: 账单API轮询（每30秒，30分钟）
+ * Phase 3: 慢速兜底（每5分钟，2小时）
+ */
+function startBillPhase(outTradeNo) {
+  var phase2Attempts = 0;
+  var maxPhase2 = 60;
+
+  var phase2Timer = setInterval(async function() {
+    phase2Attempts++;
+    var currentOrder = adminOrders.find(function(o) { return o.outTradeNo === outTradeNo; });
+    if (!currentOrder || ['paid','confirmed','refunded','partial_refund'].includes(currentOrder.status)) {
+      clearInterval(phase2Timer); autoConfirmJobs.delete(outTradeNo); return;
+    }
+
+    var today = new Date();
+    var billDateToday = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+    var yesterday = new Date(today.getTime() - 86400000);
+    var billDateYesterday = yesterday.getFullYear() + '-' + String(yesterday.getMonth()+1).padStart(2,'0') + '-' + String(yesterday.getDate()).padStart(2,'0');
+
+    // 尝试今天的账单
+    try {
+      var records = await downloadAndParseBill(billDateToday);
+      console.log('[自动确认] 账单P2第' + phase2Attempts + '次(今天): ' + records.length + '条');
+      var matched = matchBillRecord(records, currentOrder);
+      if (matched) {
+        confirmFromBill(currentOrder, matched, outTradeNo);
+        clearInterval(phase2Timer); return;
+      }
+    } catch (e) { /* 今天账单可能不存在，继续轮询 */ }
+
+    // 尝试昨天的账单（处理跨日交易）
+    try {
+      var records2 = await downloadAndParseBill(billDateYesterday);
+      var matched2 = matchBillRecord(records2, currentOrder);
+      if (matched2) {
+        confirmFromBill(currentOrder, matched2, outTradeNo);
+        clearInterval(phase2Timer); return;
+      }
+    } catch (e) { /* 忽略 */ }
+
+    if (phase2Attempts >= maxPhase2) {
+      clearInterval(phase2Timer);
+      console.log('[自动确认] Phase 2超时，进入慢速兜底: ' + outTradeNo);
+      autoConfirmJobs.get(outTradeNo).phase = 3;
+      startSlowBillPhase(outTradeNo);
+    }
+  }, 30000);
+}
+
+/**
+ * Phase 3: 慢速兜底（每5分钟，2小时）
+ */
+function startSlowBillPhase(outTradeNo) {
+  var phase3Attempts = 0;
+  var maxPhase3 = 24;
+
+  var phase3Timer = setInterval(async function() {
+    phase3Attempts++;
+    var currentOrder = adminOrders.find(function(o) { return o.outTradeNo === outTradeNo; });
+    if (!currentOrder || ['paid','confirmed','refunded','partial_refund'].includes(currentOrder.status)) {
+      clearInterval(phase3Timer); autoConfirmJobs.delete(outTradeNo); return;
+    }
+
+    var orderAge = Date.now() - new Date(currentOrder.createdAt).getTime();
+    if (orderAge > 3 * 3600000) {
+      console.log('[自动确认] 订单超时3小时，停止兜底: ' + outTradeNo);
+      clearInterval(phase3Timer); autoConfirmJobs.delete(outTradeNo); return;
+    }
+
+    var today = new Date();
+    var billDateToday = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+    var yesterday = new Date(today.getTime() - 86400000);
+    var billDateYesterday = yesterday.getFullYear() + '-' + String(yesterday.getMonth()+1).padStart(2,'0') + '-' + String(yesterday.getDate()).padStart(2,'0');
+
+    try {
+      var records = await downloadAndParseBill(billDateToday);
+      console.log('[自动确认] 账单P3第' + phase3Attempts + '次(今天): ' + records.length + '条');
+      var matched = matchBillRecord(records, currentOrder);
+      if (matched) {
+        confirmFromBill(currentOrder, matched, outTradeNo);
+        clearInterval(phase3Timer); return;
+      }
+    } catch (e) { }
+
+    try {
+      var records2 = await downloadAndParseBill(billDateYesterday);
+      var matched2 = matchBillRecord(records2, currentOrder);
+      if (matched2) {
+        confirmFromBill(currentOrder, matched2, outTradeNo);
+        clearInterval(phase3Timer); return;
+      }
+    } catch (e) { }
+
+    if (phase3Attempts >= maxPhase3) {
+      console.log('[自动确认] 慢速兜底超时，停止: ' + outTradeNo);
+      clearInterval(phase3Timer); autoConfirmJobs.delete(outTradeNo);
+    }
+  }, 300000);
+}
+
+/**
+ * 从账单匹配结果确认到账
+ */
+function confirmFromBill(order, matchedRecord, outTradeNo) {
+  order.status = 'paid';
+  order.paidAt = new Date().toISOString();
+  order.tradeNo = (matchedRecord['支付宝交易号'] || '') + '_BILL_AUTO';
+  order.autoConfirmed = true;
+  order.confirmMethod = 'bill_match';
+  saveOrders();
+  var cached = cashierOrders.get(outTradeNo);
+  if (cached) { cached.status = 'paid'; cached.tradeNo = order.tradeNo; }
+  console.log('[自动确认] ✅ 账单匹配确认: ' + outTradeNo + ', ¥' + order.amount);
+  autoConfirmJobs.delete(outTradeNo);
 }
 
 // ======================== 【商户登录会话管理】 ========================
@@ -701,7 +842,8 @@ app.get('/cashier/check', async (req, res) => {
 
   // 用户已报告支付完成（从支付宝返回），待商户确认
   if (adminOrder.status === 'pending_confirm') {
-    return res.json({ code: 'OK', status: 'pending_confirm', amount: adminOrder.amount, auto_confirming: billPollingJobs.has(outTradeNo) });
+    var job = autoConfirmJobs.get(outTradeNo);
+    return res.json({ code: 'OK', status: 'pending_confirm', amount: adminOrder.amount, auto_confirming: !!job, phase: job ? job.phase : 0 });
   }
 
   // 首次查询，标记为"支付中"（用户已扫码）
@@ -781,8 +923,8 @@ app.post('/cashier/report-paid', express.json(), async (req, res) => {
     await saveOrders();
     console.log(`>>> [UID收银台] 用户报告支付完成（待确认）: ${outTradeNo}, 金额: ¥${order.amount}`);
 
-    // 如果有支付宝应用凭证，启动账单轮询自动确认
-    startBillAutoConfirm(order);
+    // 如果有支付宝SDK，启动自动确认（交易查询+账单兜底）
+    startAutoConfirm(order);
   }
 
   res.json({ code: 'OK', message: '已收到支付报告', status: order.status });

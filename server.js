@@ -391,10 +391,10 @@ function initAlipaySdk(runtime, id, merchant) {
   }
 }
 
-// ======================== 账单API自动确认 ========================
+// ======================== 自动确认到账（交易查询 + 账单兜底） ========================
 
-/** 正在轮询的订单（防止重复轮询） */
-const billPollingJobs = new Map(); // outTradeNo -> { timer, merchantId, startTime }
+/** 正在自动确认的订单（防止重复轮询） */
+const autoConfirmJobs = new Map(); // outTradeNo -> { startTime, merchantId, phase }
 
 /**
  * 查询支付宝账单下载URL
@@ -563,79 +563,224 @@ function matchBillRecord(records, order) {
 }
 
 /**
- * 启动账单轮询自动确认
- * 当订单变为 pending_confirm 时，每60秒查一次账单，匹配到入账自动确认 paid
- * 最多轮询10分钟，超时后停止（保持 pending_confirm 等待手动确认）
+ * 启动自动确认到账（混合策略）
+ *
+ * 当订单变为 pending_confirm 时，系统自动检测支付是否成功：
+ *   Phase 1: alipay.trade.query 每10秒查询（当面付模式秒级确认，5分钟）
+ *   Phase 2: 账单API 每30秒查询（UID模式兜底，查今天+昨天账单，30分钟）
+ *   Phase 3: 账单API 每5分钟慢速兜底（最长2小时，处理账单延迟生成的情况）
+ *
+ * 确认成功后自动标记 paid，超时则保持 pending_confirm 等待手动确认。
  *
  * @param {string} merchantId - 商户ID
- * @param {Object} rt - 商户运行时
+ * @param {Object} rt - 商户运行时（含 alipaySdk）
  * @param {Object} order - 订单对象（引用，匹配成功时直接修改）
  */
-function startBillAutoConfirm(merchantId, rt, order) {
+function startAutoConfirm(merchantId, rt, order) {
   var outTradeNo = order.outTradeNo;
+  if (autoConfirmJobs.has(outTradeNo)) return;
+  if (!rt.alipaySdk) return; // 无SDK无法查询
 
-  // 已有轮询任务在跑，不重复启动
-  if (billPollingJobs.has(outTradeNo)) return;
+  autoConfirmJobs.set(outTradeNo, { startTime: Date.now(), merchantId, phase: 1 });
+  console.log('[自动确认] 启动: ' + outTradeNo + ', ¥' + order.amount);
 
-  var merchant = (loadMerchants() || []).find(function(m) { return m.id === merchantId; });
-  if (!merchant || !merchant.appId || !merchant.privateKey) return; // 无凭证无法轮询
-  if (!rt.alipaySdk) return; // SDK 未初始化
+  // ===== Phase 1: alipay.trade.query 快速查询 =====
+  var phase1Attempts = 0;
+  var maxPhase1 = 30; // 30 × 10s = 5分钟
 
-  console.log('[账单轮询] 启动自动确认: ' + outTradeNo + ', 金额: ¥' + order.amount);
-
-  var attempt = 0;
-  var maxAttempts = 10; // 10次 × 60秒 = 最多10分钟
-  var today = new Date();
-  var billDate = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-
-  var timer = setInterval(async function() {
-    attempt++;
+  var phase1Timer = setInterval(async function() {
+    phase1Attempts++;
 
     // 检查订单是否已被确认（商户手动确认或其他途径）
     var currentOrder = rt.orders.find(function(o) { return o.outTradeNo === outTradeNo; });
     if (!currentOrder || currentOrder.status === 'paid' || currentOrder.status === 'confirmed' || currentOrder.status === 'refunded') {
-      console.log('[账单轮询] 订单已处理，停止轮询: ' + outTradeNo);
-      clearInterval(timer);
-      billPollingJobs.delete(outTradeNo);
+      console.log('[自动确认] 订单已处理，停止: ' + outTradeNo);
+      clearInterval(phase1Timer);
+      autoConfirmJobs.delete(outTradeNo);
       return;
     }
 
     try {
-      var records = await downloadAndParseBill(rt.alipaySdk, billDate);
-      console.log('[账单轮询] 第' + attempt + '次查询，获取到 ' + records.length + ' 条记录');
+      var result = await rt.alipaySdk.exec('alipay.trade.query', {
+        bizContent: { out_trade_no: outTradeNo }
+      });
+      var resp = result.alipay_trade_query_response || result;
+      var tradeStatus = resp.tradeStatus || resp.trade_status;
+      var tradeNo = resp.tradeNo || resp.trade_no;
 
-      var matched = matchBillRecord(records, currentOrder);
-      if (matched) {
-        // 自动确认到账！
+      if (resp.code === '10000' && (tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED')) {
+        // ✅ 交易查询确认成功！
         currentOrder.status = 'paid';
         currentOrder.paidAt = new Date().toISOString();
-        currentOrder.tradeNo = (matched['支付宝交易号'] || '') + '_BILL_AUTO';
+        currentOrder.tradeNo = tradeNo;
         currentOrder.autoConfirmed = true;
+        currentOrder.confirmMethod = 'trade_query';
         saveMerchantFile(merchantId, 'orders', rt.orders);
 
-        // 同步更新内存缓存
         var cached = rt.cashierOrders.get(outTradeNo);
-        if (cached) {
-          cached.status = 'paid';
-          cached.tradeNo = currentOrder.tradeNo;
-        }
+        if (cached) { cached.status = 'paid'; cached.tradeNo = tradeNo; }
 
-        console.log('[账单轮询] ✅ 自动确认到账: ' + outTradeNo + ', 金额: ¥' + currentOrder.amount);
-        clearInterval(timer);
-        billPollingJobs.delete(outTradeNo);
+        console.log('[自动确认] ✅ trade.query确认到账: ' + outTradeNo + ', ¥' + currentOrder.amount);
+        clearInterval(phase1Timer);
+        autoConfirmJobs.delete(outTradeNo);
+        return;
+      }
+      // UID模式订单不在交易系统中，trade.query返回"订单不存在"是正常的，不记录为错误
+    } catch (e) {
+      // trade.query调用失败（网络问题等），继续尝试
+      console.log('[自动确认] P1第' + phase1Attempts + '次trade.query异常: ' + e.message);
+    }
+
+    // Phase 1超时 → 进入Phase 2（账单轮询）
+    if (phase1Attempts >= maxPhase1) {
+      clearInterval(phase1Timer);
+      console.log('[自动确认] Phase 1超时，进入账单轮询: ' + outTradeNo);
+      autoConfirmJobs.get(outTradeNo).phase = 2;
+      startBillPhase(merchantId, rt, outTradeNo);
+    }
+  }, 10000);
+}
+
+/**
+ * Phase 2/3: 账单API轮询（UID模式兜底）
+ * Phase 2: 每30秒查一次，持续30分钟（60次）
+ * Phase 3: 每5分钟查一次，持续最多2小时（24次）
+ */
+function startBillPhase(merchantId, rt, outTradeNo) {
+  var phase2Attempts = 0;
+  var maxPhase2 = 60; // 60 × 30s = 30分钟
+
+  var phase2Timer = setInterval(async function() {
+    phase2Attempts++;
+
+    var currentOrder = rt.orders.find(function(o) { return o.outTradeNo === outTradeNo; });
+    if (!currentOrder || currentOrder.status === 'paid' || currentOrder.status === 'confirmed' || currentOrder.status === 'refunded') {
+      clearInterval(phase2Timer);
+      autoConfirmJobs.delete(outTradeNo);
+      return;
+    }
+
+    // 今天的账单日期（可能尚未生成）
+    var today = new Date();
+    var billDateToday = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    // 昨天的账单（总是完整可用）
+    var yesterday = new Date(today.getTime() - 86400000);
+    var billDateYesterday = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
+
+    // 尝试今天的账单
+    try {
+      var records = await downloadAndParseBill(rt.alipaySdk, billDateToday);
+      console.log('[自动确认] 账单P2第' + phase2Attempts + '次(今天): ' + records.length + '条');
+      var matched = matchBillRecord(records, currentOrder);
+      if (matched) {
+        confirmFromBill(currentOrder, matched, merchantId, rt, outTradeNo);
+        clearInterval(phase2Timer);
         return;
       }
     } catch (e) {
-      console.log('[账单轮询] 第' + attempt + '次查询失败: ' + e.message);
+      // 今天的账单可能还不存在，这是正常情况，不停止轮询
     }
 
-    // 超过最大次数，停止轮询
-    if (attempt >= maxAttempts) {
-      console.log('[账单轮询] 达到最大轮询次数，停止: ' + outTradeNo + '（保持待确认状态）');
-      clearInterval(timer);
-      billPollingJobs.delete(outTradeNo);
+    // 尝试昨天的账单（处理跨日交易）
+    try {
+      var records2 = await downloadAndParseBill(rt.alipaySdk, billDateYesterday);
+      var matched2 = matchBillRecord(records2, currentOrder);
+      if (matched2) {
+        confirmFromBill(currentOrder, matched2, merchantId, rt, outTradeNo);
+        clearInterval(phase2Timer);
+        return;
+      }
+    } catch (e) {
+      // 忽略昨天的账单查询失败
     }
-  }, 60 * 1000); // 每60秒一次
+
+    // Phase 2超时 → 进入Phase 3（慢速兜底）
+    if (phase2Attempts >= maxPhase2) {
+      clearInterval(phase2Timer);
+      console.log('[自动确认] Phase 2超时，进入慢速兜底: ' + outTradeNo);
+      autoConfirmJobs.get(outTradeNo).phase = 3;
+      startSlowBillPhase(merchantId, rt, outTradeNo);
+    }
+  }, 30000);
+}
+
+/**
+ * Phase 3: 慢速账单兜底（每5分钟一次，最长2小时）
+ * 处理支付宝账单延迟生成（T+1）的情况
+ */
+function startSlowBillPhase(merchantId, rt, outTradeNo) {
+  var phase3Attempts = 0;
+  var maxPhase3 = 24; // 24 × 5min = 2小时
+
+  var phase3Timer = setInterval(async function() {
+    phase3Attempts++;
+
+    var currentOrder = rt.orders.find(function(o) { return o.outTradeNo === outTradeNo; });
+    if (!currentOrder || currentOrder.status === 'paid' || currentOrder.status === 'confirmed' || currentOrder.status === 'refunded') {
+      clearInterval(phase3Timer);
+      autoConfirmJobs.delete(outTradeNo);
+      return;
+    }
+
+    // 订单创建超过3小时，停止轮询
+    var orderAge = Date.now() - new Date(currentOrder.createdAt).getTime();
+    if (orderAge > 3 * 3600000) {
+      console.log('[自动确认] 订单超时3小时，停止兜底: ' + outTradeNo + '（保持待确认）');
+      clearInterval(phase3Timer);
+      autoConfirmJobs.delete(outTradeNo);
+      return;
+    }
+
+    var today = new Date();
+    var billDateToday = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    var yesterday = new Date(today.getTime() - 86400000);
+    var billDateYesterday = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
+
+    try {
+      var records = await downloadAndParseBill(rt.alipaySdk, billDateToday);
+      console.log('[自动确认] 账单P3第' + phase3Attempts + '次(今天): ' + records.length + '条');
+      var matched = matchBillRecord(records, currentOrder);
+      if (matched) {
+        confirmFromBill(currentOrder, matched, merchantId, rt, outTradeNo);
+        clearInterval(phase3Timer);
+        return;
+      }
+    } catch (e) { }
+
+    try {
+      var records2 = await downloadAndParseBill(rt.alipaySdk, billDateYesterday);
+      var matched2 = matchBillRecord(records2, currentOrder);
+      if (matched2) {
+        confirmFromBill(currentOrder, matched2, merchantId, rt, outTradeNo);
+        clearInterval(phase3Timer);
+        return;
+      }
+    } catch (e) { }
+
+    if (phase3Attempts >= maxPhase3) {
+      console.log('[自动确认] 慢速兜底超时，停止: ' + outTradeNo + '（保持待确认）');
+      clearInterval(phase3Timer);
+      autoConfirmJobs.delete(outTradeNo);
+    }
+  }, 300000); // 5分钟
+}
+
+/**
+ * 从账单匹配结果确认到账
+ */
+function confirmFromBill(order, matchedRecord, merchantId, rt, outTradeNo) {
+  order.status = 'paid';
+  order.paidAt = new Date().toISOString();
+  order.tradeNo = (matchedRecord['支付宝交易号'] || '') + '_BILL_AUTO';
+  order.autoConfirmed = true;
+  order.confirmMethod = 'bill_match';
+  saveMerchantFile(merchantId, 'orders', rt.orders);
+
+  var cached = rt.cashierOrders.get(outTradeNo);
+  if (cached) { cached.status = 'paid'; cached.tradeNo = order.tradeNo; }
+
+  console.log('[自动确认] ✅ 账单匹配确认到账: ' + outTradeNo + ', ¥' + order.amount);
+  autoConfirmJobs.delete(outTradeNo);
 }
 
 // ======================== 工具函数 ========================
@@ -1613,8 +1758,8 @@ app.get('/m/:id/cashier/check', async (req, res) => {
   if (m.type === 'uid' || m.type === 'uid-simple') {
     // 用户已报告支付完成（从支付宝返回），待确认
     if (adminOrder.status === 'pending_confirm') {
-      var autoConfirming = billPollingJobs.has(outTradeNo);
-      return res.json({ code: 'OK', status: 'pending_confirm', amount: adminOrder.amount, auto_confirming: autoConfirming });
+      var job = autoConfirmJobs.get(outTradeNo);
+      return res.json({ code: 'OK', status: 'pending_confirm', amount: adminOrder.amount, auto_confirming: !!job, phase: job ? job.phase : 0 });
     }
     // 首次查询到，更新为"支付中"
     if (adminOrder.status === 'generated') {
@@ -1724,9 +1869,9 @@ app.post('/m/:id/cashier/report-paid', express.json(), async (req, res) => {
     saveMerchantFile(m.id, 'orders', rt.orders);
     console.log(`>>> [UID] 用户报告支付完成（待确认）: ${outTradeNo}, 金额: ¥${order.amount}`);
 
-    // 如果商户有支付宝应用凭证，启动账单轮询自动确认
+    // 如果商户有支付宝SDK，启动自动确认（交易查询+账单兜底）
     if (rt.alipaySdk) {
-      startBillAutoConfirm(m.id, rt, order);
+      startAutoConfirm(m.id, rt, order);
     }
   }
 
