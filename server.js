@@ -544,9 +544,12 @@ function generateUidMerchantZip(config) {
   const templateIndex = fs.readFileSync(path.join(UID_TEMPLATE_DIR, 'index.js'), 'utf-8');
   const injectedIndex = injectUidConfig(templateIndex, config);
   zip.addFile('index.js', Buffer.from(injectedIndex, 'utf-8'));
-  ['cashier.html', 'admin.html', 'logo-pay.png', 'package.json'].forEach(f => {
+  ['cashier.html', 'admin.html', 'login.html', 'logo-pay.png', 'package.json'].forEach(f => {
     zip.addFile(f, fs.readFileSync(path.join(UID_TEMPLATE_DIR, f)));
   });
+  // 支付跳转页（用户扫码后打开的中间页）
+  const payHtml = fs.readFileSync(path.join(UID_TEMPLATE_DIR, 'pay', 'index.html'), 'utf-8');
+  zip.addFile('pay/index.html', Buffer.from(payHtml, 'utf-8'));
   const nodeModulesDir = path.join(UID_TEMPLATE_DIR, 'node_modules');
   if (fs.existsSync(nodeModulesDir)) zip.addLocalFolder(nodeModulesDir, 'node_modules');
   return zip.toBuffer();
@@ -897,6 +900,10 @@ app.post('/api/merchants/:id/deploy', requireAuth, async (req, res) => {
     const logoBuffer = fs.readFileSync(path.join(templateDir, 'logo-pay.png'));
     const packageJson = fs.readFileSync(path.join(templateDir, 'package.json'), 'utf-8');
     const loginHtml = fs.readFileSync(path.join(templateDir, 'login.html'), 'utf-8');
+    // UID 模板包含 pay/index.html 支付跳转页
+    const payHtml = (merchant.type === 'uid' || merchant.type === 'uid-simple')
+      ? fs.readFileSync(path.join(UID_TEMPLATE_DIR, 'pay', 'index.html'), 'utf-8')
+      : null;
 
     const config = {
       appId: merchant.appId || '',
@@ -943,6 +950,10 @@ app.post('/api/merchants/:id/deploy', requireAuth, async (req, res) => {
       { path: '.gitignore', content: 'node_modules/\ndata/\n*.log\n' },
       { path: 'README.md', content: `# ${merchantName} 收款后台\n\n部署到 Railway` },
     ];
+    // UID 模板额外上传 pay/index.html
+    if (payHtml) {
+      files.push({ path: 'pay/index.html', content: payHtml });
+    }
 
     for (const file of files) {
       const getRes = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${repoName}/contents/${file.path}`, {
@@ -1037,32 +1048,14 @@ function getMerchantNameForSession(req) {
   return (entry && entry.name) || req.runtime.security.merchantName || req.merchant.merchantName || '';
 }
 
-// 支付宝浏览器检测：支付宝扫码时直接跳 alipays://，不显示中间确认页
+// 支付跳转页：统一由 pay/index.html 静态页面处理
+// 页内 JavaScript 负责 alipays:// 跳转 + 用户返回时回传支付完成通知
 app.get('/m/:id/pay', (req, res, next) => {
-  handleAlipayRedirect(req, res, next);
+  next();
 });
 app.get('/m/:id/pay/', (req, res, next) => {
-  handleAlipayRedirect(req, res, next);
-});
-
-function handleAlipayRedirect(req, res, next) {
-  const ua = (req.get('User-Agent') || '').toLowerCase();
-  // 支付宝内置浏览器 UA 包含 AlipayClient / AlipayDefined / AliApp(Alipay)
-  if (/alipayclient|alipaydefined|aliapp/i.test(ua)) {
-    const m = req.merchant;
-    if (m.type !== 'uid' && m.type !== 'uid-simple') return next();
-    const amount = parseFloat(req.query.amount) || 0;
-    const memo = req.query.memo || '';
-    const uid = req.query.uid || m.alipayUid;
-    if (amount && uid) {
-      const biz = JSON.stringify({ s: 'money', u: uid, a: amount.toFixed(2), m: memo });
-      const ebiz = encodeURIComponent(biz);
-      const alipaysUrl = 'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + ebiz;
-      return res.redirect(302, alipaysUrl);
-    }
-  }
   next();
-}
+});
 
 // 商户静态文件（根据类型选择模板目录）
 app.use('/m/:id', (req, res, next) => {
@@ -1272,7 +1265,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
     const frontendBaseUrl = req.body.base_url || '';
     const effectiveBaseUrl = frontendBaseUrl ? (frontendBaseUrl.replace(/\/$/, '') + '/') : '';
     if (effectiveBaseUrl) {
-      qrContent = `${effectiveBaseUrl}m/${m.id}/pay/?amount=${amtNum.toFixed(2)}&uid=${m.alipayUid}&memo=${encodeURIComponent(subject)}`;
+      qrContent = `${effectiveBaseUrl}m/${m.id}/pay/?order=${outTradeNo}&amount=${amtNum.toFixed(2)}&uid=${m.alipayUid}&memo=${encodeURIComponent(subject)}`;
     }
 
     let qrDataUrl = '';
@@ -1356,7 +1349,16 @@ app.get('/m/:id/cashier/check', async (req, res) => {
     return res.json({ code: 'OK', status: 'paid', trade_no: adminOrder.tradeNo, amount: adminOrder.amount });
   }
 
-  if (m.type === 'uid') {
+  if (m.type === 'uid' || m.type === 'uid-simple') {
+    // 用户已报告支付完成（从支付宝返回），待商户确认
+    if (adminOrder.status === 'pending_confirm') {
+      return res.json({ code: 'OK', status: 'pending_confirm', amount: adminOrder.amount });
+    }
+    // 首次查询到，更新为"支付中"
+    if (adminOrder.status === 'generated') {
+      adminOrder.status = 'paying';
+      saveMerchantFile(m.id, 'orders', rt.orders);
+    }
     return res.json({ code: 'OK', status: 'waiting' });
   }
 
@@ -1436,6 +1438,32 @@ app.post('/m/:id/cashier/confirm', express.json(), async (req, res) => {
   if (cOrder) { cOrder.status = 'paid'; cOrder.tradeNo = order.tradeNo; rt.cashierOrders.set(outTradeNo, cOrder); }
 
   res.json({ code: 'OK', message: '已确认到账', out_trade_no: outTradeNo });
+});
+
+// UID 客户端报告支付完成（用户从支付宝返回时触发）
+app.post('/m/:id/cashier/report-paid', express.json(), async (req, res) => {
+  const m = req.merchant;
+  const rt = req.runtime;
+  const { outTradeNo } = req.body;
+  if (!outTradeNo) return res.status(400).json({ code: 'ERROR', message: '缺少订单号' });
+
+  const order = rt.orders.find(o => o.outTradeNo === outTradeNo);
+  if (!order) return res.status(404).json({ code: 'ERROR', message: '订单不存在' });
+
+  // 已支付或已退款的订单不再更新
+  if (['paid', 'confirmed', 'refunded', 'partial_refund'].includes(order.status)) {
+    return res.json({ code: 'OK', message: '订单已处理', status: order.status });
+  }
+
+  // 标记为"待确认到账"（用户已从支付宝返回，可能已完成支付）
+  if (['generated', 'paying', 'waiting'].includes(order.status)) {
+    order.status = 'pending_confirm';
+    order.reportedAt = new Date().toISOString();
+    saveMerchantFile(m.id, 'orders', rt.orders);
+    console.log(`>>> [UID] 用户报告支付完成（待确认）: ${outTradeNo}, 金额: ¥${order.amount}`);
+  }
+
+  res.json({ code: 'OK', message: '已收到支付报告', status: order.status });
 });
 
 // ===== 订单 API =====

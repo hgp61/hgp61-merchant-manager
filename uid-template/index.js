@@ -360,7 +360,7 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
       effectiveBaseUrl = frontendBaseUrl || CONFIG.baseUrl || '';
 
       if (effectiveBaseUrl) {
-        const redirectUrl = `${effectiveBaseUrl}/pay/?amount=${parseFloat(amount).toFixed(2)}&uid=${CONFIG.alipayUid}&memo=${encodeURIComponent(subject)}`;
+        const redirectUrl = `${effectiveBaseUrl}/pay/?order=${outTradeNo}&amount=${parseFloat(amount).toFixed(2)}&uid=${CONFIG.alipayUid}&memo=${encodeURIComponent(subject)}`;
         qrContent = redirectUrl;
         console.log(`>>> [UID收银台] 使用 HTTPS 跳转方式: ${outTradeNo}, 金额: ¥${amount}`);
         console.log(`   二维码内容: ${redirectUrl}`);
@@ -508,6 +508,11 @@ app.get('/cashier/check', async (req, res) => {
     });
   }
 
+  // 用户已报告支付完成（从支付宝返回），待商户确认
+  if (adminOrder.status === 'pending_confirm') {
+    return res.json({ code: 'OK', status: 'pending_confirm', amount: adminOrder.amount });
+  }
+
   // 首次查询，标记为"支付中"（用户已扫码）
   if (adminOrder.status === 'generated') {
     adminOrder.status = 'paying';
@@ -551,6 +556,42 @@ app.post('/cashier/confirm', express.json(), async (req, res) => {
 
   console.log(`>>> [UID收银台] 手动确认到账: ${outTradeNo}, 金额: ¥${order.amount}`);
   res.json({ code: 'OK', message: '已确认到账', out_trade_no: outTradeNo });
+});
+
+/**
+ * POST /cashier/report-paid — 客户端报告支付完成（用户从支付宝返回时触发）
+ *
+ * UID 模式无法通过 API 自动检测支付，当用户从支付宝返回 /pay/ 页面时，
+ * 前端自动调用此接口通知服务器"用户可能已完成支付"。
+ * 服务器将订单标记为 pending_confirm（待确认到账），商户在后台看到后核实确认。
+ *
+ * Body: { outTradeNo }
+ */
+app.post('/cashier/report-paid', express.json(), async (req, res) => {
+  const { outTradeNo } = req.body;
+  if (!outTradeNo) {
+    return res.status(400).json({ code: 'ERROR', message: '缺少订单号' });
+  }
+
+  const order = adminOrders.find(o => o.outTradeNo === outTradeNo);
+  if (!order) {
+    return res.status(404).json({ code: 'ERROR', message: '订单不存在' });
+  }
+
+  // 已支付或已退款的订单不再更新
+  if (order.status === 'paid' || order.status === 'confirmed' || order.status === 'refunded' || order.status === 'partial_refund') {
+    return res.json({ code: 'OK', message: '订单已处理', status: order.status });
+  }
+
+  // 标记为"待确认到账"（用户已从支付宝返回，可能已完成支付）
+  if (order.status === 'generated' || order.status === 'paying' || order.status === 'waiting') {
+    order.status = 'pending_confirm';
+    order.reportedAt = new Date().toISOString();
+    await saveOrders();
+    console.log(`>>> [UID收银台] 用户报告支付完成（待确认）: ${outTradeNo}, 金额: ¥${order.amount}`);
+  }
+
+  res.json({ code: 'OK', message: '已收到支付报告', status: order.status });
 });
 
 // ======================== 【收款后台 API】 ========================

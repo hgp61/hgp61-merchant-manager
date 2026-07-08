@@ -2,22 +2,267 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>收银台 - 黑金PAY</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>黑金PAY · 正在打开支付宝</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif; background:#070707; color:#d4af37; display:flex; align-items:center; justify-content:center; min-height:100vh; text-align:center; flex-direction:column; padding:24px; }
-  .tip { text-align:center; max-width:320px; }
-  .tip-icon { font-size:48px; margin-bottom:20px; }
-  .tip-title { font-size:20px; font-weight:800; letter-spacing:2px; margin-bottom:12px; background:linear-gradient(135deg,#f0d77a,#d4af37); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-  .tip-desc { font-size:13px; color:rgba(255,255,255,0.35); line-height:1.8; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #070707;
+    color: #d4af37;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+    text-align: center;
+    flex-direction: column;
+    padding: 24px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .card {
+    background: rgba(18,18,18,0.92);
+    border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 20px;
+    padding: 36px 28px;
+    width: 100%;
+    max-width: 340px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 40px rgba(212,175,55,0.06);
+    position: relative;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 5%; right: 5%; height: 2px;
+    background: linear-gradient(90deg, transparent, #d4af37, transparent);
+    box-shadow: 0 0 12px rgba(212,175,55,0.4);
+  }
+  .logo { font-size: 26px; font-weight: 800; letter-spacing: 6px; margin-bottom: 4px;
+    background: linear-gradient(135deg, #f0d77a, #d4af37, #b8860b);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .brand { font-size: 11px; color: rgba(212,175,55,0.4); margin-bottom: 28px; letter-spacing: 3px; }
+  .amount-label { font-size: 12px; color: rgba(255,255,255,0.25); margin-bottom: 6px; letter-spacing: 1px; }
+  .amount { font-size: 44px; font-weight: 900; margin-bottom: 4px;
+    background: linear-gradient(135deg, #f0d77a, #d4af37);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .memo { font-size: 13px; color: rgba(212,175,55,0.5); margin-bottom: 28px; word-break: break-all; }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid rgba(212,175,55,0.2);
+    border-top-color: #d4af37;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 18px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status-text {
+    font-size: 15px; font-weight: 700;
+    color: #d4af37;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .status-sub {
+    font-size: 12px; color: rgba(255,255,255,0.3);
+    line-height: 1.6;
+  }
+  .pay-btn {
+    display: none; width: 100%;
+    background: linear-gradient(135deg, #d4af37, #b8860b);
+    color: #070707;
+    border: none; border-radius: 14px;
+    padding: 16px 0;
+    font-size: 17px; font-weight: 800;
+    text-decoration: none;
+    letter-spacing: 3px;
+    cursor: pointer;
+    margin-top: 20px;
+    box-shadow: 0 4px 20px rgba(212,175,55,0.25);
+  }
+  .pay-btn.show { display: block; }
+  .fallback {
+    display: none;
+    margin-top: 24px;
+  }
+  .fallback.show { display: block; }
+  .fallback-note {
+    font-size: 11px; color: rgba(255,255,255,0.18);
+    margin-top: 20px; line-height: 1.8;
+  }
+  .success-icon {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #52c41a, #389e0d);
+    color: #fff;
+    font-size: 32px; font-weight: 800;
+    line-height: 60px;
+    margin: 0 auto 18px;
+    box-shadow: 0 4px 20px rgba(82,196,26,0.3);
+  }
+  .success-view { display: none; }
+  .success-view.show { display: block; }
+  .jump-view.hide { display: none; }
+  .done-note {
+    font-size: 12px; color: rgba(255,255,255,0.3);
+    margin-top: 24px; line-height: 1.8;
+  }
+  .report-status {
+    font-size: 11px; color: rgba(82,196,26,0.5);
+    margin-top: 12px;
+    display: none;
+  }
+  .report-status.show { display: block; }
 </style>
 </head>
 <body>
-  <div class="tip">
-    <div class="tip-icon">&#x1f4f1;</div>
-    <div class="tip-title">请使用支付宝扫码</div>
-    <div class="tip-desc">为保护交易安全<br>请在支付宝中扫描此二维码</div>
+  <div class="card">
+    <!-- 跳转中视图 -->
+    <div class="jump-view" id="jumpView">
+      <div class="logo">黑金PAY</div>
+      <div class="brand">HEIJIN PAY</div>
+      <div class="amount-label">支付金额</div>
+      <div class="amount" id="amountDisplay">¥0.00</div>
+      <div class="memo" id="memoDisplay"></div>
+      <div class="spinner" id="spinner"></div>
+      <div class="status-text" id="statusText">正在打开支付宝...</div>
+      <div class="status-sub" id="statusSub">请稍候，系统正在为您跳转</div>
+      <a class="pay-btn" id="payBtn" href="#">重新打开支付宝</a>
+      <div class="fallback" id="fallback">
+        <div class="fallback-note">
+          <span style="color:rgba(212,175,55,0.4)">●</span> 若自动跳转失败，请点击上方按钮<br>
+          <span style="color:rgba(212,175,55,0.4)">●</span> 金额已锁定，确认无误后输入密码即可<br>
+          <span style="color:rgba(212,175,55,0.4)">●</span> 若提示风险请点击「仍然支付」继续
+        </div>
+      </div>
+    </div>
+
+    <!-- 支付成功视图（从支付宝返回后显示） -->
+    <div class="success-view" id="successView">
+      <div class="success-icon">✓</div>
+      <div class="status-text">支付完成</div>
+      <div class="amount" style="margin-top:12px;margin-bottom:20px;" id="successAmount">¥0.00</div>
+      <div class="status-sub">系统已通知商户确认到账，请稍候</div>
+      <div class="report-status" id="reportStatus">✓ 已通知商户</div>
+      <div class="done-note">
+        <span style="color:rgba(212,175,55,0.4)">●</span> 您可点击左上角返回商家页面<br>
+        <span style="color:rgba(212,175,55,0.4)">●</span> 或关闭当前页面
+      </div>
+    </div>
   </div>
+<script>
+(function() {
+  // ===== 解析 URL 参数 =====
+  var params = new URLSearchParams(window.location.search);
+  var amount = parseFloat(params.get('amount')) || 0;
+  var memo = params.get('memo') || '';
+  var uid = params.get('uid') || '';
+  var orderId = params.get('order') || '';
+
+  // 显示金额和备注
+  document.getElementById('amountDisplay').textContent = '\u00a5' + amount.toFixed(2);
+  document.getElementById('successAmount').textContent = '\u00a5' + amount.toFixed(2);
+  if (memo) {
+    document.getElementById('memoDisplay').textContent = memo;
+  }
+
+  if (!amount || !uid) {
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('statusText').textContent = '参数不完整';
+    document.getElementById('statusSub').textContent = '请重新扫描二维码';
+    return;
+  }
+
+  // ===== 生成支付宝跳转链接（多 appId 兜底） =====
+  var bizData = JSON.stringify({ s: 'money', u: uid, a: amount.toFixed(2), m: memo });
+  var encodedBiz = encodeURIComponent(bizData);
+  var alipayUrls = [
+    'alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=' + encodedBiz,
+    'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + encodedBiz
+  ];
+
+  // 设置手动按钮链接（使用第二个 URL 作为备选）
+  document.getElementById('payBtn').href = alipayUrls[1];
+
+  var triedIndex = 0;
+  var hasHidden = false;
+  var hasReported = false;
+
+  // ===== 向服务器报告支付完成 =====
+  function reportPaid() {
+    if (hasReported || !orderId) return;
+    hasReported = true;
+
+    // 使用相对路径：从 /pay/ 或 /m/:id/pay/ 到 ../cashier/report-paid
+    var apiUrl = '../cashier/report-paid';
+
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', apiUrl, true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          console.log('[report-paid] 响应:', xhr.status, xhr.responseText);
+          if (xhr.status === 200) {
+            document.getElementById('reportStatus').classList.add('show');
+          }
+        }
+      };
+      xhr.send(JSON.stringify({ outTradeNo: orderId }));
+    } catch(e) {
+      console.log('[report-paid] 发送失败:', e.message);
+      // 失败也允许重试一次
+      hasReported = false;
+      setTimeout(function() { reportPaid(); }, 2000);
+    }
+  }
+
+  // ===== 显示支付成功视图 =====
+  function showSuccess() {
+    document.getElementById('jumpView').classList.add('hide');
+    document.getElementById('successView').classList.add('show');
+    document.title = '黑金PAY · 支付完成';
+    // 延迟 500ms 报告，确保页面已稳定
+    setTimeout(reportPaid, 500);
+  }
+
+  // ===== 尝试打开支付宝 =====
+  function tryOpen() {
+    var url = alipayUrls[triedIndex];
+    window.location.href = url;
+    triedIndex = (triedIndex + 1) % alipayUrls.length;
+  }
+
+  // ===== 监听页面可见性：用户从支付宝返回时触发 =====
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') {
+      hasHidden = true;
+    } else if (hasHidden) {
+      // 用户已从支付宝返回，显示支付完成页面
+      showSuccess();
+    }
+  });
+
+  // 页面加载后立即尝试跳转
+  tryOpen();
+
+  // 300ms 后尝试第二个入口
+  setTimeout(function() {
+    if (document.visibilityState === 'visible') {
+      tryOpen();
+    }
+  }, 300);
+
+  // 2.5 秒后如果页面仍可见，显示手动按钮
+  setTimeout(function() {
+    if (document.visibilityState === 'visible') {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('statusText').textContent = '未能自动跳转';
+      document.getElementById('statusSub').textContent = '请点击下方按钮手动打开支付宝';
+      document.getElementById('payBtn').classList.add('show');
+      document.getElementById('fallback').classList.add('show');
+    }
+  }, 2500);
+})();
+</script>
 </body>
 </html>

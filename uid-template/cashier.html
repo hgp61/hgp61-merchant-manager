@@ -1195,27 +1195,28 @@ async function createQRCode() {
     return;
   }
 
-  // ===== UID 简易支付：直接跳 /pay 页面，让服务端 handleAlipayRedirect 处理跳转 =====
+  // ===== UID 简易支付：创建订单后跳 /pay 页面，带上订单号用于回传 =====
   if (IS_SIMPLE && MERCHANT_UID) {
     const payBtn = document.getElementById('payBtn');
     payBtn.disabled = true;
-    payBtn.textContent = '跳转中...';
+    payBtn.textContent = '正在创建订单...';
 
-    // 先异步创建订单（后台记录，不阻塞跳转）
-    fetch(`${API_BASE}cashier/qrcode`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount, subject, base_url: window.location.origin })
-    }).then(res => res.json()).then(data => {
+    // 创建订单（等待完成，获取订单号后再跳转）
+    try {
+      const res = await fetch(`${API_BASE}cashier/qrcode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, subject, base_url: window.location.origin })
+      });
+      const data = await res.json();
       if (data.code === 'OK') {
         currentOutTradeNo = data.out_trade_no;
       }
-    }).catch(() => {});
+    } catch (e) {}
 
-    // 直接跳转到 /pay 页面，服务端 handleAlipayRedirect 根据 UA 处理：
-    // 支付宝内置浏览器 → 302 跳 alipays://（可靠）
-    // 其他浏览器 → 返回 pay/index.html，用户点击按钮跳转
-    window.location.href = `${API_BASE}pay?amount=${encodeURIComponent(amount)}&uid=${encodeURIComponent(MERCHANT_UID)}&memo=${encodeURIComponent(subject)}`;
+    // 跳转到 /pay 页面，带上订单号，pay/index.html 负责跳转支付宝和回传支付完成
+    const orderParam = currentOutTradeNo ? `&order=${encodeURIComponent(currentOutTradeNo)}` : '';
+    window.location.href = `${API_BASE}pay/?amount=${encodeURIComponent(amount)}&uid=${encodeURIComponent(MERCHANT_UID)}&memo=${encodeURIComponent(subject)}${orderParam}`;
 
     return;
   }
@@ -1334,6 +1335,13 @@ function startPolling() {
       if (data.status === 'paid') {
         clearInterval(pollingTimer);
         showSuccess(data);
+      } else if (data.status === 'pending_confirm') {
+        // 用户已从支付宝返回，等待商户确认到账
+        const tip = document.getElementById('payTip');
+        if (tip) {
+          tip.className = 'qr-tip paid';
+          tip.innerHTML = '<span class="dot"></span> 用户已完成支付，等待确认到账...';
+        }
       }
     } catch (e) {}
   }, 2000);

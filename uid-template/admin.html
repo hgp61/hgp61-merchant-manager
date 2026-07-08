@@ -870,6 +870,7 @@
     background: rgba(255, 152, 0, 0.12);
     color: #ffb74d;
     border: 1px solid rgba(255, 152, 0, 0.25);
+    animation: pulse 1.5s ease-in-out infinite;
   }
   .status-failed {
     background: rgba(244, 67, 54, 0.12);
@@ -944,6 +945,27 @@
     font-size: 11px;
     color: rgba(212,175,55,0.5);
     margin-left: 6px;
+  }
+
+  /* 确认到账按钮 */
+  .btn-confirm-paid {
+    background: linear-gradient(135deg, rgba(82,196,26,0.15), rgba(82,196,26,0.08));
+    border: 1px solid rgba(82,196,26,0.4);
+    color: #66bb6a;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    margin-left: 4px;
+  }
+  .btn-confirm-paid:hover {
+    background: linear-gradient(135deg, rgba(82,196,26,0.25), rgba(82,196,26,0.15));
+    border-color: rgba(82,196,26,0.6);
+    box-shadow: 0 2px 10px rgba(82,196,26,0.2);
   }
 
   /* 订单详情按钮 */
@@ -1779,6 +1801,7 @@
             <option value="">全部</option>
             <option value="generated">订单生成</option>
             <option value="paying">支付中</option>
+            <option value="pending_confirm">待确认到账</option>
             <option value="paid">支付成功</option>
             <option value="refunded">已退款</option>
             <option value="partial_refund">部分退款</option>
@@ -2559,6 +2582,7 @@ let currentPage = 1;
 const STATUS_MAP = {
   'generated':       { text: '订单生成', cls: 'status-generated' },
   'paying':          { text: '支付中',   cls: 'status-paying' },
+  'pending_confirm': { text: '待确认到账', cls: 'status-pending' },
   'paid':            { text: '支付成功', cls: 'status-success' },
   'refunded':        { text: '已退款',   cls: 'status-refund' },
   'partial_refund':  { text: '部分退款', cls: 'status-refund' },
@@ -2612,6 +2636,13 @@ async function loadOrders() {
     const res = await fetch('api/orders');
     const json = await res.json();
     if (json.code === 'OK') {
+      // 检测新的待确认订单（声音提醒）
+      var newPending = (json.data || []).filter(function(o) { return o.status === 'pending_confirm'; }).length;
+      if (newPending > _lastPendingCount && _lastPendingCount >= 0) {
+        playNotifySound();
+      }
+      _lastPendingCount = newPending;
+
       allOrders = json.data;
       applyFilters();
     }
@@ -2619,6 +2650,59 @@ async function loadOrders() {
     console.error('加载订单失败:', e);
   }
 }
+
+// 确认到账（UID 模式手动确认）
+async function confirmPaid(outTradeNo) {
+  try {
+    var res = await fetch('cashier/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outTradeNo: outTradeNo })
+    });
+    var json = await res.json();
+    if (json.code === 'OK') {
+      showAlert('已确认到账', '\u2705');
+      loadOrders();
+      loadDashboard();
+    } else {
+      showAlert(json.message || '确认失败', '\u26a0\ufe0f');
+    }
+  } catch (e) {
+    showAlert('网络错误：' + e.message, '\u26a0\ufe0f');
+  }
+}
+
+// 声音提醒（Web Audio API 生成短促提示音）
+var _audioCtx = null;
+function playNotifySound() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = _audioCtx.createOscillator();
+    var gain = _audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(_audioCtx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, _audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, _audioCtx.currentTime + 0.5);
+    osc.start(_audioCtx.currentTime);
+    osc.stop(_audioCtx.currentTime + 0.5);
+  } catch(e) {}
+}
+
+// 订单页自动刷新（5秒轮询）
+var _lastPendingCount = -1;
+var _ordersPollingTimer = null;
+function startOrdersPolling() {
+  if (_ordersPollingTimer) return;
+  _ordersPollingTimer = setInterval(function() {
+    var ordersPage = document.getElementById('ordersPage');
+    if (ordersPage && ordersPage.style.display !== 'none') {
+      loadOrders();
+    }
+  }, 5000);
+}
+startOrdersPolling();
 
 // 渲染表格
 function renderOrders() {
@@ -2650,6 +2734,8 @@ function renderOrders() {
       const statusInfo = STATUS_MAP[o.status] || { text: o.status, cls: 'status-none' };
       const createTime = fmtTime(o.createdAt);
       const paidTime = o.paidAt ? fmtTime(o.paidAt) : '';
+      const reportedTime = o.reportedAt ? fmtTime(o.reportedAt) : '';
+      const canConfirm = (o.status === 'pending_confirm' || o.status === 'generated' || o.status === 'paying');
       return `<tr>
         <td class="order-no-cell" title="${o.tradeNo || o.outTradeNo}">${o.tradeNo || o.outTradeNo}</td>
         <td class="amount-cell">${fmtAmount(parseFloat(o.amount))}</td>
@@ -2657,11 +2743,13 @@ function renderOrders() {
         <td><span class="status-badge ${statusInfo.cls}">${statusInfo.text}</span></td>
         <td class="date-cell">
           <span class="date-row"><span class="date-label">创建</span>${createTime}</span>
+          ${reportedTime ? `<span class="date-row"><span class="date-label">报告</span>${reportedTime}</span>` : ''}
           ${paidTime ? `<span class="date-row"><span class="date-label">支付</span>${paidTime}</span>` : ''}
           ${o.refund ? `<span class="date-row"><span class="date-label">退款</span>${fmtTime(o.refund.refundedAt)}</span>` : ''}
         </td>
         <td>
           <button class="btn-detail-order" onclick="showOrderDetail('${o.outTradeNo}')">详情</button>
+          ${canConfirm ? `<button class="btn-confirm-paid" onclick="confirmPaid('${o.outTradeNo}')">确认到账</button>` : ''}
           ${o.status === 'paid' && !o.refund ? `<button class="btn-refund" onclick="handleRefundClick('${o.outTradeNo}', '${fmtAmount(parseFloat(o.amount))}')">退款</button>` : ''}
           ${o.refund ? `<span class="refund-info">已退款</span>` : ''}
         </td>
@@ -3572,6 +3660,7 @@ function renderRecentOrders(orders) {
     const statusMap = {
       generated: { text: '订单生成', cls: 'status-pending' },
       paying: { text: '支付中', cls: 'status-paying' },
+      pending_confirm: { text: '待确认到账', cls: 'status-pending' },
       paid: { text: '支付成功', cls: 'status-paid' },
       refunded: { text: '已退款', cls: 'status-refunded' },
       partial_refund: { text: '部分退款', cls: 'status-refunded' }
