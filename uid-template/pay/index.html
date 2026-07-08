@@ -194,26 +194,38 @@
 
     // 使用相对路径：从 /pay/ 或 /m/:id/pay/ 到 ../cashier/report-paid
     var apiUrl = '../cashier/report-paid';
+    var retried = false;
 
-    try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', apiUrl, true);
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-          console.log('[report-paid] 响应:', xhr.status, xhr.responseText);
-          if (xhr.status === 200) {
-            document.getElementById('reportStatus').classList.add('show');
+    function send() {
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', apiUrl, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.timeout = 5000;
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4) {
+            console.log('[report-paid] 响应:', xhr.status, xhr.responseText);
+            if (xhr.status === 200) {
+              document.getElementById('reportStatus').classList.add('show');
+            } else if (!retried) {
+              retried = true;
+              setTimeout(send, 2000);
+            }
           }
-        }
-      };
-      xhr.send(JSON.stringify({ outTradeNo: orderId }));
-    } catch(e) {
-      console.log('[report-paid] 发送失败:', e.message);
-      // 失败也允许重试一次
-      hasReported = false;
-      setTimeout(function() { reportPaid(); }, 2000);
+        };
+        xhr.ontimeout = function() {
+          if (!retried) { retried = true; setTimeout(send, 2000); }
+        };
+        xhr.onerror = function() {
+          if (!retried) { retried = true; setTimeout(send, 2000); }
+        };
+        xhr.send(JSON.stringify({ outTradeNo: orderId }));
+      } catch(e) {
+        console.log('[report-paid] 发送失败:', e.message);
+        if (!retried) { retried = true; setTimeout(send, 2000); }
+      }
     }
+    send();
   }
 
   // ===== 显示支付成功视图 =====

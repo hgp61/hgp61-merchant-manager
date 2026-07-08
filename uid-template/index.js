@@ -24,6 +24,18 @@ const os = require('os');
 const express = require('express');
 const QRCode = require('qrcode');
 
+// 可选依赖：支付宝SDK + 账单解析（用于自动确认到账）
+let AlipaySdk = null;
+let AdmZip = null;
+let iconv = null;
+try {
+  AlipaySdk = require('alipay-sdk').default || require('alipay-sdk');
+  AdmZip = require('adm-zip');
+  iconv = require('iconv-lite');
+} catch (e) {
+  console.log('>>> [可选依赖] alipay-sdk/adm-zip/iconv-lite 未安装，账单自动确认功能不可用');
+}
+
 // PostgreSQL 支持（Railway 部署时通过 DATABASE_URL 自动启用）
 let pgPool = null;
 if (process.env.DATABASE_URL) {
@@ -77,6 +89,14 @@ const CONFIG = {
   // 【可选】第三方 API 密钥
   apiKey: '',
 
+  // 【可选】支付宝开放平台应用凭证（用于账单API自动确认到账）
+  // 填写后，用户报告支付完成时将自动轮询支付宝账单，匹配金额后自动确认
+  // 不填则使用手动确认模式
+  appId: '',
+  privateKey: '',
+  alipayPublicKey: '',
+  keyType: 'PKCS8',
+
   // 商户名称（用于后台默认显示）
   merchantName: 'UID测试',
 
@@ -86,6 +106,177 @@ const CONFIG = {
   // 商户登录密码（由商户管理系统注入，默认 yy123456）
   merchantPassword: '',
 };
+
+// ======================== 【支付宝SDK + 账单自动确认】 ========================
+
+let alipaySdk = null;
+if (AlipaySdk && CONFIG.appId && CONFIG.privateKey) {
+  try {
+    const rawKey = String(CONFIG.privateKey).trim();
+    const tryKeyType = CONFIG.keyType || (rawKey.includes('BEGIN RSA') ? 'PKCS1' : 'PKCS8');
+    alipaySdk = new AlipaySdk({
+      appId: String(CONFIG.appId),
+      privateKey: rawKey,
+      alipayPublicKey: String(CONFIG.alipayPublicKey || ''),
+      keyType: tryKeyType,
+    });
+    console.log('>>> [AlipaySdk] 初始化成功 (keyType=' + tryKeyType + ')，账单自动确认已启用');
+  } catch (e) {
+    console.warn('>>> [AlipaySdk] 初始化失败: ' + e.message);
+  }
+}
+
+/** 正在轮询的订单 */
+const billPollingJobs = new Map();
+
+function downloadFile(url, maxRedirects) {
+  if (maxRedirects === undefined) maxRedirects = 3;
+  return new Promise(function(resolve, reject) {
+    var getter = url.startsWith('https') ? https : http;
+    getter.get(url, function(res) {
+      if ([301, 302, 303, 307, 308].indexOf(res.statusCode) >= 0 && res.headers.location && maxRedirects > 0) {
+        return downloadFile(res.headers.location, maxRedirects - 1).then(resolve).catch(reject);
+      }
+      if (res.statusCode !== 200) { reject(new Error('HTTP ' + res.statusCode)); return; }
+      var chunks = [];
+      res.on('data', function(c) { chunks.push(c); });
+      res.on('end', function() { resolve(Buffer.concat(chunks)); });
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+function parseCSVLine(line) {
+  var result = [], current = '', inQuotes = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (ch === '"') { if (inQuotes && line[i+1] === '"') { current += '"'; i++; } else { inQuotes = !inQuotes; } }
+    else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else { current += ch; }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function parseBillCSV(csvContent) {
+  var lines = csvContent.split(/\r?\n/).filter(function(l) { return l.trim(); });
+  var records = [];
+  var hi = 0;
+  while (hi < lines.length && lines[hi].charAt(0) === '#') hi++;
+  if (hi >= lines.length) return records;
+  var headers = parseCSVLine(lines[hi]);
+  for (var i = hi + 1; i < lines.length; i++) {
+    if (lines[i].charAt(0) === '#' || !lines[i].trim()) continue;
+    var vals = parseCSVLine(lines[i]);
+    if (vals.length < 3) continue;
+    var row = {};
+    for (var j = 0; j < headers.length && j < vals.length; j++) row[headers[j]] = vals[j];
+    records.push(row);
+  }
+  return records;
+}
+
+async function downloadAndParseBill(billDate) {
+  var billType = 'signcustomer';
+  var result = await alipaySdk.exec('alipay.data.dataservice.bill.downloadurl.query', {
+    bizContent: { bill_type: billType, bill_date: billDate }
+  });
+  var resp = result.alipay_data_dataservice_bill_downloadurl_query_response || result;
+  if (resp.code !== '10000' || !resp.bill_download_url) {
+    // signcustomer 不可用时尝试 trade
+    result = await alipaySdk.exec('alipay.data.dataservice.bill.downloadurl.query', {
+      bizContent: { bill_type: 'trade', bill_date: billDate }
+    });
+    resp = result.alipay_data_dataservice_bill_downloadurl_query_response || result;
+    if (resp.code !== '10000' || !resp.bill_download_url) {
+      throw new Error('账单API错误: ' + (resp.msg || resp.sub_msg || resp.code));
+    }
+  }
+  var zipBuffer = await downloadFile(resp.bill_download_url);
+  var zip = new AdmZip(zipBuffer);
+  var entries = zip.getEntries();
+  // 支付宝账单ZIP可能包含汇总CSV和明细CSV，跳过汇总文件优先解析明细
+  var csvEntry = null;
+  for (var i = 0; i < entries.length; i++) {
+    var name = entries[i].entryName;
+    if (!name.endsWith('.csv')) continue;
+    if (name.indexOf('汇总') >= 0 || name.toLowerCase().indexOf('summary') >= 0) continue;
+    csvEntry = entries[i];
+    break;
+  }
+  if (!csvEntry) {
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].entryName.endsWith('.csv')) { csvEntry = entries[i]; break; }
+    }
+  }
+  if (csvEntry) {
+    return parseBillCSV(iconv.decode(csvEntry.getData(), 'gbk'));
+  }
+  return [];
+}
+
+function matchBillRecord(records, order) {
+  var target = parseFloat(order.amount).toFixed(2);
+  var orderTime = new Date(order.createdAt);
+  for (var i = 0; i < records.length; i++) {
+    var rec = records[i];
+    var incomeStr = rec['收入金额'] || rec['商家实收'] || rec['订单金额'] || rec['交易额'] || '';
+    var income = parseFloat(incomeStr);
+    if (isNaN(income) || income.toFixed(2) !== target) continue;
+    var timeStr = rec['创建时间'] || rec['完成时间'] || rec['付款时间'] || rec['交易创建时间'] || '';
+    if (timeStr) {
+      var txTime = new Date(timeStr.replace(/-/g, '/'));
+      if (!isNaN(txTime.getTime())) {
+        var diff = txTime.getTime() - orderTime.getTime();
+        if (diff < -60000 || diff > 35 * 60000) continue;
+      }
+    }
+    var typeStr = rec['账务类型'] || rec['业务类型'] || '';
+    if (typeStr.indexOf('退款') >= 0 || typeStr.indexOf('支出') >= 0) continue;
+    return rec;
+  }
+  return null;
+}
+
+function startBillAutoConfirm(order) {
+  if (!alipaySdk || !AdmZip || !iconv) return;
+  var outTradeNo = order.outTradeNo;
+  if (billPollingJobs.has(outTradeNo)) return;
+
+  console.log('[账单轮询] 启动自动确认: ' + outTradeNo + ', 金额: ¥' + order.amount);
+  var attempt = 0;
+  var today = new Date();
+  var billDate = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+
+  var timer = setInterval(async function() {
+    attempt++;
+    var currentOrder = adminOrders.find(function(o) { return o.outTradeNo === outTradeNo; });
+    if (!currentOrder || ['paid','confirmed','refunded','partial_refund'].includes(currentOrder.status)) {
+      clearInterval(timer); billPollingJobs.delete(outTradeNo); return;
+    }
+    try {
+      var records = await downloadAndParseBill(billDate);
+      console.log('[账单轮询] 第' + attempt + '次查询，' + records.length + ' 条记录');
+      var matched = matchBillRecord(records, currentOrder);
+      if (matched) {
+        currentOrder.status = 'paid';
+        currentOrder.paidAt = new Date().toISOString();
+        currentOrder.tradeNo = (matched['支付宝交易号'] || '') + '_BILL_AUTO';
+        currentOrder.autoConfirmed = true;
+        await saveOrders();
+        var cached = cashierOrders.get(outTradeNo);
+        if (cached) { cached.status = 'paid'; cached.tradeNo = currentOrder.tradeNo; }
+        console.log('[账单轮询] ✅ 自动确认: ' + outTradeNo + ', ¥' + currentOrder.amount);
+        clearInterval(timer); billPollingJobs.delete(outTradeNo);
+        return;
+      }
+    } catch (e) { console.log('[账单轮询] 第' + attempt + '次失败: ' + e.message); }
+    if (attempt >= 10) {
+      console.log('[账单轮询] 达到最大次数，停止: ' + outTradeNo);
+      clearInterval(timer); billPollingJobs.delete(outTradeNo);
+    }
+  }, 60000);
+}
 
 // ======================== 【商户登录会话管理】 ========================
 
@@ -510,7 +701,7 @@ app.get('/cashier/check', async (req, res) => {
 
   // 用户已报告支付完成（从支付宝返回），待商户确认
   if (adminOrder.status === 'pending_confirm') {
-    return res.json({ code: 'OK', status: 'pending_confirm', amount: adminOrder.amount });
+    return res.json({ code: 'OK', status: 'pending_confirm', amount: adminOrder.amount, auto_confirming: billPollingJobs.has(outTradeNo) });
   }
 
   // 首次查询，标记为"支付中"（用户已扫码）
@@ -589,6 +780,9 @@ app.post('/cashier/report-paid', express.json(), async (req, res) => {
     order.reportedAt = new Date().toISOString();
     await saveOrders();
     console.log(`>>> [UID收银台] 用户报告支付完成（待确认）: ${outTradeNo}, 金额: ¥${order.amount}`);
+
+    // 如果有支付宝应用凭证，启动账单轮询自动确认
+    startBillAutoConfirm(order);
   }
 
   res.json({ code: 'OK', message: '已收到支付报告', status: order.status });

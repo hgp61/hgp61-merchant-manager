@@ -968,6 +968,20 @@
     box-shadow: 0 2px 10px rgba(82,196,26,0.2);
   }
 
+  /* 自动确认标记 */
+  .auto-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, rgba(33,150,243,0.2), rgba(33,150,243,0.1));
+    border: 1px solid rgba(33,150,243,0.4);
+    color: #42a5f5;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
   /* 订单详情按钮 */
   .btn-detail-order {
     background: rgba(212,175,55,0.08);
@@ -2644,7 +2658,11 @@ async function loadOrders() {
       _lastPendingCount = newPending;
 
       allOrders = json.data;
-      applyFilters();
+      // 只在订单页面可见时才渲染表格（其他页面仅检测待确认订单 + 声音提醒）
+      var ordersPage = document.getElementById('ordersPage');
+      if (ordersPage && ordersPage.style.display !== 'none') {
+        applyFilters();
+      }
     }
   } catch (e) {
     console.error('加载订单失败:', e);
@@ -2674,9 +2692,25 @@ async function confirmPaid(outTradeNo) {
 
 // 声音提醒（Web Audio API 生成短促提示音）
 var _audioCtx = null;
+var _audioUnlocked = false;
+
+// 浏览器 autoplay policy：用户首次交互后才能播放声音
+function unlockAudio() {
+  if (_audioUnlocked) return;
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    _audioUnlocked = true;
+  } catch(e) {}
+}
+document.addEventListener('click', unlockAudio);
+document.addEventListener('keydown', unlockAudio);
+document.addEventListener('touchstart', unlockAudio);
+
 function playNotifySound() {
   try {
     if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
     var osc = _audioCtx.createOscillator();
     var gain = _audioCtx.createGain();
     osc.connect(gain);
@@ -2690,16 +2724,13 @@ function playNotifySound() {
   } catch(e) {}
 }
 
-// 订单页自动刷新（5秒轮询）
+// 自动刷新（5秒全局轮询，检测待确认订单 + 声音提醒）
 var _lastPendingCount = -1;
 var _ordersPollingTimer = null;
 function startOrdersPolling() {
   if (_ordersPollingTimer) return;
   _ordersPollingTimer = setInterval(function() {
-    var ordersPage = document.getElementById('ordersPage');
-    if (ordersPage && ordersPage.style.display !== 'none') {
-      loadOrders();
-    }
+    loadOrders();
   }, 5000);
 }
 startOrdersPolling();
@@ -2740,7 +2771,7 @@ function renderOrders() {
         <td class="order-no-cell" title="${o.tradeNo || o.outTradeNo}">${o.tradeNo || o.outTradeNo}</td>
         <td class="amount-cell">${fmtAmount(parseFloat(o.amount))}</td>
         <td>支付宝扫码</td>
-        <td><span class="status-badge ${statusInfo.cls}">${statusInfo.text}</span></td>
+        <td><span class="status-badge ${statusInfo.cls}">${statusInfo.text}</span>${o.autoConfirmed ? '<span class="auto-badge" title="账单API自动确认">自动</span>' : ''}</td>
         <td class="date-cell">
           <span class="date-row"><span class="date-label">创建</span>${createTime}</span>
           ${reportedTime ? `<span class="date-row"><span class="date-label">报告</span>${reportedTime}</span>` : ''}
