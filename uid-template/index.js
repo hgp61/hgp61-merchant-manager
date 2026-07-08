@@ -602,6 +602,29 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
           message: '请在 index.js 的 CONFIG 中填写 alipayUid（支付宝用户ID）',
         });
       }
+
+      // UID简易支付有SDK时 → 使用 trade.precreate 创建正式交易（可自动确认）
+      if (alipaySdk) {
+        try {
+          var result = await alipaySdk.exec('alipay.trade.precreate', {
+            bizContent: { out_trade_no: outTradeNo, total_amount: parseFloat(amount).toFixed(2), subject, body, timeout_express: '30m' },
+          });
+          var resp = result.alipay_trade_precreate_response || result;
+          var tradeQrCode = resp.qrCode || resp.qr_code;
+          if (resp.code === '10000' && tradeQrCode) {
+            cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: tradeQrCode, status: 'waiting', useApi: true, createdAt: Date.now() });
+            setTimeout(() => cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
+            adminOrders.push({ outTradeNo, amount: parseFloat(amount).toFixed(2), subject, status: 'generated', useApi: true, useTradeApi: true, createdAt: new Date().toISOString(), paidAt: null, payerIp: getClientIp(req) });
+            await saveOrders();
+            return res.json({ code: 'OK', out_trade_no: outTradeNo, qr_code: tradeQrCode, qr_image: '', amount, subject, use_api: true, use_direct_redirect: true, message: '正在跳转支付宝...' });
+          }
+          console.log('[UID简易+SDK] trade.precreate 失败: ' + JSON.stringify({ code: resp.code, msg: resp.msg }));
+        } catch (e) {
+          console.log('[UID简易+SDK] trade.precreate 异常: ' + e.message);
+        }
+      }
+
+      // 无SDK或trade.precreate失败 → 个人转账模式
       const bizData = JSON.stringify({ s: 'money', u: CONFIG.alipayUid, a: parseFloat(amount).toFixed(2), m: subject });
       qrContent = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(bizData)}`;
       console.log(`>>> [UID收银台] UID 简易支付，直接跳转: ${outTradeNo}, 金额: ¥${amount}`);
@@ -621,6 +644,7 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
         subject,
         status: 'generated',
         useApi: false,
+        useTradeApi: false,
         createdAt: new Date().toISOString(),
         paidAt: null,
         payerIp: getClientIp(req),
@@ -676,7 +700,28 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
       }
     }
 
-    // ===== 模式 A：使用 alipays:// 协议 =====
+    // ===== 模式 A：UID 标准模式 =====
+    // 有 SDK → 先尝试 trade.precreate（正式交易订单，可自动确认）
+    if (!useApi && alipaySdk) {
+      try {
+        var result = await alipaySdk.exec('alipay.trade.precreate', {
+          bizContent: { out_trade_no: outTradeNo, total_amount: parseFloat(amount).toFixed(2), subject, body, timeout_express: '30m' },
+        });
+        var resp = result.alipay_trade_precreate_response || result;
+        var tradeQrCode = resp.qrCode || resp.qr_code;
+        if (resp.code === '10000' && tradeQrCode) {
+          qrContent = tradeQrCode;
+          useApi = true;
+          console.log('[UID+SDK] trade.precreate 成功: ' + outTradeNo + ', ¥' + amount);
+        } else {
+          console.log('[UID+SDK] trade.precreate 失败: ' + JSON.stringify({ code: resp.code, msg: resp.msg }));
+        }
+      } catch (e) {
+        console.log('[UID+SDK] trade.precreate 异常: ' + e.message);
+      }
+    }
+
+    // 无 SDK 或 trade.precreate 失败 → 使用 alipays:// 个人转账
     if (!useApi) {
       if (!CONFIG.alipayUid) {
         return res.status(400).json({
@@ -735,6 +780,7 @@ app.post('/cashier/qrcode', express.json(), async (req, res) => {
       subject,
       status: 'generated',
       useApi,
+      useTradeApi: useApi, // 是否使用trade API创建（用于自动确认判断）
       createdAt: new Date().toISOString(),
       paidAt: null,
       payerIp: req.ip,
@@ -823,6 +869,47 @@ app.get('/cashier/check', async (req, res) => {
       }
     } catch (err) {
       console.error(`>>> [UID收银台] API 查询异常:`, err.message);
+    }
+  }
+
+  // 有 SDK 且订单用 trade API 创建 → 实时查询支付宝支付状态
+  if (alipaySdk && adminOrder.useTradeApi && !adminOrder.status.startsWith('paid') && !adminOrder.status.startsWith('confirm')) {
+    try {
+      var result = await alipaySdk.exec('alipay.trade.query', { bizContent: { out_trade_no: outTradeNo } });
+      var resp = result.alipay_trade_query_response || result;
+      var tradeStatus = resp.tradeStatus || resp.trade_status;
+      var tradeNo = resp.tradeNo || resp.trade_no;
+
+      if (resp.code === '10000') {
+        if (tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED') {
+          adminOrder.status = 'paid';
+          adminOrder.paidAt = new Date().toISOString();
+          adminOrder.tradeNo = tradeNo;
+          adminOrder.autoConfirmed = true;
+          adminOrder.confirmMethod = 'trade_query';
+          await saveOrders();
+
+          const order = cashierOrders.get(outTradeNo) || {};
+          order.status = 'paid';
+          order.tradeNo = tradeNo;
+          cashierOrders.set(outTradeNo, order);
+
+          // 停止自动确认任务
+          if (autoConfirmJobs.has(outTradeNo)) autoConfirmJobs.delete(outTradeNo);
+
+          return res.json({ code: 'OK', status: 'paid', trade_no: tradeNo, amount: adminOrder.amount });
+        }
+        // 首次查询到，标记为"支付中"
+        if (adminOrder.status === 'generated') {
+          adminOrder.status = 'paying';
+          await saveOrders();
+        }
+        return res.json({ code: 'OK', status: 'waiting', trade_status: tradeStatus });
+      }
+      // TRADE_NOT_EXIST 等情况
+      return res.json({ code: 'OK', status: adminOrder.status === 'generated' ? 'waiting' : adminOrder.status });
+    } catch (err) {
+      console.log('[UID+SDK] check trade.query异常: ' + err.message);
     }
   }
 

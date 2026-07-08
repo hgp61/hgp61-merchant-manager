@@ -788,7 +788,7 @@
         <input type="text" class="form-input" id="inputAlipayUid" placeholder="如：2088..." style="font-family:Consolas,monospace;" maxlength="16">
       </div>
       <div class="form-group" style="border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:12px 14px;background:rgba(52,152,219,0.05);margin-top:16px;">
-        <span style="color:#3498db;font-size:12px;">💡 UID 模式说明：扫码唤起支付宝转账页面，金额已锁定，付款方只需确认转账。到账需在支付宝 APP 确认后，去后台手动点击「确认到账」。</span>
+        <span style="color:#3498db;font-size:12px;">💡 UID 模式说明：扫码唤起支付宝转账页面，金额已锁定，付款方只需确认转账。到账需手动点击「确认到账」。后续可在商户详情中「配置支付宝凭证」启用自动确认到账。</span>
       </div>
     </div>
     <div class="modal-footer">
@@ -853,6 +853,48 @@
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeAdminPwdModal()">取消</button>
       <button class="btn-submit" onclick="submitAdminChangePwd()">确认修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- UID商户配置支付宝凭证弹窗 -->
+<div class="modal-overlay" id="uidSdkModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">配置支付宝应用凭证</div>
+      <button class="modal-close" onclick="closeUidSdkModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="border:1px solid rgba(52,152,219,0.2);border-radius:8px;padding:12px 14px;background:rgba(52,152,219,0.05);margin-bottom:16px;">
+        <span style="color:#3498db;font-size:12px;">💡 配置后，系统将使用当面付 API（alipay.trade.precreate）创建正式交易订单，而非个人转账。这样支付宝 API 可以实时检测支付结果，自动确认到账（秒级）。<br>要求：支付宝开放平台创建应用 → 签约「当面付」能力 → 获取 APPID、应用私钥和支付宝公钥。</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-required">支付宝 APPID</label>
+        <div class="form-hint">从支付宝开放平台获取的应用ID</div>
+        <input type="text" class="form-input" id="inputUidSdkAppId" placeholder="如：2021..." style="font-family:Consolas,monospace;">
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-required">应用私钥（PKCS#1 / PKCS#8）</label>
+        <div class="form-hint">支持 PKCS#1 或 PKCS#8，头尾自动补全</div>
+        <textarea class="form-textarea" id="inputUidSdkPrivateKey" placeholder="MIIE..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-required">私钥格式</label>
+        <select class="form-input" id="inputUidSdkKeyType" style="font-family:inherit;">
+          <option value="auto">自动检测（推荐）</option>
+          <option value="PKCS8">PKCS#8</option>
+          <option value="PKCS1">PKCS#1</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label form-label-required">支付宝公钥</label>
+        <div class="form-hint">从支付宝开放平台获取的支付宝公钥</div>
+        <textarea class="form-textarea" id="inputUidSdkAlipayPublicKey" placeholder="MIIB..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeUidSdkModal()">取消</button>
+      <button class="btn-submit" id="btnSubmitUidSdk" onclick="submitUidSdk()">保存配置</button>
     </div>
   </div>
 </div>
@@ -1308,6 +1350,27 @@ async function openMerchantDetail(id) {
     `;
     if (isUid || isUidSimple) {
       html += `<div class="detail-item detail-full"><div class="detail-label">支付宝 UID</div><div class="detail-value">${escapeHtml(d.alipayUid || '')}</div></div>`;
+      // UID商户支付宝凭证（可选配置，用于启用自动确认到账）
+      html += `
+        <div class="detail-item detail-full" style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">
+          <div class="detail-label" style="color:var(--gold);">⚡ 支付宝应用凭证（可选）</div>
+          <div class="detail-value" style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">
+            ${d.appId ? '✅ 已配置 — 订单可自动确认到账' : '⚠️ 未配置 — 订单需手动确认到账。配置后系统使用当面付 API 创建交易订单，自动检测支付结果。'}
+          </div>
+          ${d.appId ? `
+            <div class="detail-item"><div class="detail-label">APPID</div><div class="detail-value">${escapeHtml(d.appId)}</div></div>
+            <div class="detail-item"><div class="detail-label">私钥格式</div><div class="detail-value">${escapeHtml(d.keyType || '未设置')}</div></div>
+            <div class="detail-item detail-full"><div class="detail-label">应用私钥</div><div class="detail-value">${escapeHtml(maskPrivateKey(d.privateKey))}</div></div>
+            <div class="detail-item detail-full"><div class="detail-label">支付宝公钥</div><div class="detail-value">${escapeHtml(maskPrivateKey(d.alipayPublicKey))}</div></div>
+            <div style="margin-top:8px;display:flex;gap:8px;">
+              <button class="btn-submit" style="font-size:12px;padding:4px 12px;" onclick="openUidSdkModal('${d.id}')">修改凭证</button>
+              <button style="font-size:12px;padding:4px 12px;background:#e74c3c;color:#fff;border:none;border-radius:4px;cursor:pointer;" onclick="clearUidSdk('${d.id}')">移除凭证</button>
+            </div>
+          ` : `
+            <button class="btn-submit" style="font-size:12px;padding:6px 16px;margin-top:4px;" onclick="openUidSdkModal('${d.id}')">⚙️ 配置支付宝凭证</button>
+          `}
+        </div>
+      `;
     } else {
       html += `
         <div class="detail-item"><div class="detail-label">APPID</div><div class="detail-value">${escapeHtml(d.appId || '')}</div></div>
@@ -1558,6 +1621,94 @@ function openAdminPwdModal() {
 
 function closeAdminPwdModal() {
   document.getElementById('adminPwdModal').classList.remove('show');
+}
+
+// ===== UID 商户配置支付宝凭证 =====
+let uidSdkMerchantId = null;
+
+function openUidSdkModal(id) {
+  uidSdkMerchantId = id;
+  const m = merchants.find(x => x.id === id);
+  if (!m) return;
+  // 填入已有值
+  document.getElementById('inputUidSdkAppId').value = m.appId || '';
+  document.getElementById('inputUidSdkPrivateKey').value = m.privateKey || '';
+  document.getElementById('inputUidSdkAlipayPublicKey').value = m.alipayPublicKey || '';
+  document.getElementById('inputUidSdkKeyType').value = m.keyType || 'auto';
+  document.getElementById('uidSdkModal').classList.add('show');
+  setTimeout(() => document.getElementById('inputUidSdkAppId').focus(), 100);
+}
+
+function closeUidSdkModal() {
+  document.getElementById('uidSdkModal').classList.remove('show');
+  uidSdkMerchantId = null;
+}
+
+async function submitUidSdk() {
+  if (!uidSdkMerchantId) return;
+  const appId = document.getElementById('inputUidSdkAppId').value.trim();
+  const privateKey = document.getElementById('inputUidSdkPrivateKey').value.trim();
+  const alipayPublicKey = document.getElementById('inputUidSdkAlipayPublicKey').value.trim();
+  const keyType = document.getElementById('inputUidSdkKeyType').value;
+
+  if (!appId) return showToast('请填写 APPID', 'error');
+  if (!privateKey) return showToast('请填写应用私钥', 'error');
+  if (!alipayPublicKey) return showToast('请填写支付宝公钥', 'error');
+
+  const btn = document.getElementById('btnSubmitUidSdk');
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  try {
+    const res = await fetch(`/api/merchants/${uidSdkMerchantId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ appId, privateKey, alipayPublicKey, keyType }),
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      showToast('支付宝凭证配置成功，UID 商户已启用自动确认到账', 'success');
+      closeUidSdkModal();
+      // 更新本地商户数据
+      const idx = merchants.findIndex(x => x.id === uidSdkMerchantId);
+      if (idx !== -1 && json.data) {
+        merchants[idx] = json.data;
+      }
+      // 刷新详情
+      if (detailMerchantId === uidSdkMerchantId) openMerchantDetail(uidSdkMerchantId);
+      renderMerchants();
+    } else {
+      showToast(json.message || '配置失败', 'error');
+    }
+  } catch (e) {
+    showToast('网络错误: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '保存配置';
+  }
+}
+
+async function clearUidSdk(id) {
+  if (!confirm('确定移除此商户的支付宝应用凭证？移除后订单需手动确认到账。')) return;
+  try {
+    const res = await fetch(`/api/merchants/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ clearSdk: true }),
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      showToast('支付宝凭证已移除，订单需手动确认到账', 'success');
+      const idx = merchants.findIndex(x => x.id === id);
+      if (idx !== -1 && json.data) merchants[idx] = json.data;
+      if (detailMerchantId === id) openMerchantDetail(id);
+      renderMerchants();
+    } else {
+      showToast(json.message || '移除失败', 'error');
+    }
+  } catch (e) {
+    showToast('网络错误', 'error');
+  }
 }
 
 async function submitAdminChangePwd() {

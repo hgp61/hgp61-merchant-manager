@@ -1709,6 +1709,14 @@
     </div>
   </div>
 
+  <!-- SDK 状态提示（UID商户无SDK时显示） -->
+  <div id="sdkStatusBanner" style="display:none;margin:8px 16px;padding:12px 16px;background:rgba(230,126,34,0.1);border:1px solid rgba(230,126,34,0.3);border-radius:8px;font-size:13px;color:#e67e22;">
+    ⚠️ 此商户未配置支付宝应用凭证，订单需手动确认到账。配置后系统可自动检测支付结果并确认到账（秒级）。请联系管理员在管理系统后台配置 appId/应用私钥/支付宝公钥。
+  </div>
+  <div id="sdkOkBanner" style="display:none;margin:8px 16px;padding:12px 16px;background:rgba(46,204,113,0.1);border:1px solid rgba(46,204,113,0.3);border-radius:8px;font-size:13px;color:#2ecc71;">
+    ✅ 已配置支付宝应用凭证，订单支付后自动确认到账（秒级检测）
+  </div>
+
   <!-- 图表 + 订单列表 双栏 -->
   <div class="dash-row">
     <!-- 左：交易趋势图 -->
@@ -3755,6 +3763,26 @@ function dashPageChange(page, totalPages) {
 // 首次加载
 loadDashboard();
 loadSecurityConfig();
+
+// 检测 SDK 状态并显示提示
+(function checkSdkStatus() {
+  fetch('api/config').then(function(r) { return r.json(); }).then(function(json) {
+    if (json.code !== 'OK') return;
+    var d = json.data;
+    if (d.type === 'uid' || d.type === 'uid-simple') {
+      if (d.hasSdk || d.useTradeApi) {
+        document.getElementById('sdkOkBanner').style.display = '';
+        document.getElementById('sdkStatusBanner').style.display = 'none';
+      } else {
+        document.getElementById('sdkStatusBanner').style.display = '';
+        document.getElementById('sdkOkBanner').style.display = 'none';
+      }
+    } else {
+      document.getElementById('sdkStatusBanner').style.display = 'none';
+      document.getElementById('sdkOkBanner').style.display = 'none';
+    }
+  }).catch(function() {});
+})();
 
 // 每10秒自动刷新仪表盘
 setInterval(loadDashboard, 10000);

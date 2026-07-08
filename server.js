@@ -1214,40 +1214,46 @@ app.put('/api/merchants/:id', requireAuth, (req, res) => {
     merchant.merchantUrl = req.body.merchantUrl.trim();
   }
 
-  // 更新支付宝配置（当面付商户）
-  if (merchant.type !== 'uid') {
-    if (req.body.appId !== undefined) merchant.appId = req.body.appId;
-    if (req.body.alipayPublicKey !== undefined) merchant.alipayPublicKey = req.body.alipayPublicKey.trim();
-    if (req.body.keyType !== undefined) merchant.keyType = req.body.keyType;
+  // 更新支付宝配置（当面付商户 + UID商户可选凭证）
+  if (req.body.appId !== undefined) merchant.appId = req.body.appId;
+  if (req.body.alipayPublicKey !== undefined) merchant.alipayPublicKey = req.body.alipayPublicKey.trim();
+  if (req.body.keyType !== undefined) merchant.keyType = req.body.keyType;
 
-    if (req.body.privateKey !== undefined) {
-      let trimmedKey = req.body.privateKey.trim();
-      if (trimmedKey) {
-        if (!trimmedKey.includes('-----BEGIN') && !trimmedKey.includes('-----END')) {
-          const userKeyType = (merchant.keyType || 'auto').trim().toUpperCase();
-          if (userKeyType === 'PKCS1') {
-            trimmedKey = '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
-          } else if (userKeyType === 'PKCS8') {
-            trimmedKey = '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----';
-          } else {
-            trimmedKey = trimmedKey.startsWith('MII')
-              ? '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----'
-              : '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
-          }
+  if (req.body.privateKey !== undefined) {
+    let trimmedKey = req.body.privateKey.trim();
+    if (trimmedKey) {
+      if (!trimmedKey.includes('-----BEGIN') && !trimmedKey.includes('-----END')) {
+        const userKeyType = (merchant.keyType || 'auto').trim().toUpperCase();
+        if (userKeyType === 'PKCS1') {
+          trimmedKey = '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
+        } else if (userKeyType === 'PKCS8') {
+          trimmedKey = '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----';
+        } else {
+          trimmedKey = trimmedKey.startsWith('MII')
+            ? '-----BEGIN PRIVATE KEY-----\n' + trimmedKey + '\n-----END PRIVATE KEY-----'
+            : '-----BEGIN RSA PRIVATE KEY-----\n' + trimmedKey + '\n-----END RSA PRIVATE KEY-----';
         }
-        // 确保 PEM 头尾后有正确换行
-        trimmedKey = trimmedKey
-          .replace(/-----BEGIN [A-Z ]+-----(?!\n)/g, '$&\n')
-          .replace(/(?<!\n)-----END [A-Z ]+-----/g, '\n$&');
-        merchant.privateKey = trimmedKey;
       }
+      // 确保 PEM 头尾后有正确换行
+      trimmedKey = trimmedKey
+        .replace(/-----BEGIN [A-Z ]+-----(?!\n)/g, '$&\n')
+        .replace(/(?<!\n)-----END [A-Z ]+-----/g, '\n$&');
+      merchant.privateKey = trimmedKey;
     }
+  }
+
+  // UID商户：允许清空支付宝凭证（恢复纯个人转账模式）
+  if ((merchant.type === 'uid' || merchant.type === 'uid-simple') && req.body.clearSdk === true) {
+    merchant.appId = '';
+    merchant.privateKey = '';
+    merchant.alipayPublicKey = '';
+    merchant.keyType = '';
   }
 
   saveMerchants(list);
 
-  // 如果更新了支付宝配置，清除运行时缓存，下次访问时重新初始化
-  if (req.body.appId !== undefined || req.body.privateKey !== undefined || req.body.alipayPublicKey !== undefined || req.body.keyType !== undefined) {
+  // 如果更新了支付宝配置（或清空了SDK凭证），清除运行时缓存，下次访问时重新初始化
+  if (req.body.appId !== undefined || req.body.privateKey !== undefined || req.body.alipayPublicKey !== undefined || req.body.keyType !== undefined || req.body.clearSdk === true) {
     merchantRuntimes.delete(req.params.id);
     console.log(`[商户:${req.params.id}] 支付宝配置已更新，运行时缓存已清除，下次访问时重新初始化`);
   }
@@ -1646,6 +1652,48 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
 
   if (m.type === 'uid' || m.type === 'uid-simple') {
     // ===== UID / UID 简易支付 收银台 =====
+
+    // 如果 UID 商户配置了支付宝应用凭证（有 alipaySdk），使用当面付 API 创建正式交易订单
+    // 这样 trade.query 可以实时查询支付状态，实现秒级自动确认
+    if (rt.alipaySdk) {
+      try {
+        const result = await rt.alipaySdk.exec('alipay.trade.precreate', {
+          bizContent: { out_trade_no: outTradeNo, total_amount: amtNum.toFixed(2), subject, body, timeout_express: '30m' },
+        });
+        const resp = result.alipay_trade_precreate_response || result;
+        const tradeQrCode = resp.qrCode || resp.qr_code;
+
+        if (resp.code === '10000' && tradeQrCode) {
+          rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: tradeQrCode, status: 'waiting', createdAt: Date.now() });
+          setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
+
+          rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: getClientIp(req), useTradeApi: true });
+          saveMerchantFile(m.id, 'orders', rt.orders);
+
+          let qrDataUrl = '';
+          try { qrDataUrl = await QRCode.toDataURL(tradeQrCode, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } }); } catch (e) {}
+
+          if (m.type === 'uid-simple') {
+            return res.json({
+              code: 'OK', out_trade_no: outTradeNo, qr_code: tradeQrCode, qr_image: '',
+              amount, subject, use_api: true,
+              use_direct_redirect: true,
+              message: '正在跳转支付宝...',
+            });
+          }
+
+          return res.json({ code: 'OK', out_trade_no: outTradeNo, qr_code: tradeQrCode, qr_image: qrDataUrl, amount, subject, use_api: true, message: '收款码已生成（自动确认模式）' });
+        } else {
+          // trade.precreate 失败，回退到个人转账模式
+          console.log('[UID+SDK] trade.precreate 失败，回退到个人转账: ' + JSON.stringify({ code: resp.code, msg: resp.msg || resp.sub_msg }));
+        }
+      } catch (err) {
+        // trade.precreate 异常，回退到个人转账模式
+        console.log('[UID+SDK] trade.precreate 异常，回退到个人转账: ' + err.message);
+      }
+    }
+
+    // 无 SDK 或 trade.precreate 失败：使用个人转账 URL（需手动确认到账）
     const alipaysUrl = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(JSON.stringify({ s: 'money', u: m.alipayUid, a: amtNum.toFixed(2), m: subject }))}`;
 
     if (m.type === 'uid-simple') {
@@ -1653,8 +1701,8 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
       rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: alipaysUrl, status: 'waiting', createdAt: Date.now() });
       setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
 
-      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: getClientIp(req) });
-       saveMerchantFile(m.id, 'orders', rt.orders);
+      rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: getClientIp(req), useTradeApi: false });
+      saveMerchantFile(m.id, 'orders', rt.orders);
 
       return res.json({
         code: 'OK', out_trade_no: outTradeNo, qr_code: alipaysUrl, qr_image: '',
@@ -1682,7 +1730,7 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
     rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: qrContent, status: 'waiting', createdAt: Date.now() });
     setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
 
-    rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: getClientIp(req) });
+    rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: getClientIp(req), useTradeApi: false });
     saveMerchantFile(m.id, 'orders', rt.orders);
 
     return res.json({
@@ -1756,6 +1804,44 @@ app.get('/m/:id/cashier/check', async (req, res) => {
   }
 
   if (m.type === 'uid' || m.type === 'uid-simple') {
+    // UID商户有SDK且订单用trade API创建 → 实时查询支付宝
+    if (rt.alipaySdk && adminOrder.useTradeApi) {
+      try {
+        const result = await rt.alipaySdk.exec('alipay.trade.query', { bizContent: { out_trade_no: outTradeNo } });
+        const resp = result.alipay_trade_query_response || result;
+        const tradeStatus = resp.tradeStatus || resp.trade_status;
+        const tradeNo = resp.tradeNo || resp.trade_no;
+
+        if (resp.code === '10000') {
+          if (tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED') {
+            adminOrder.status = 'paid';
+            adminOrder.paidAt = new Date().toISOString();
+            adminOrder.tradeNo = tradeNo;
+            adminOrder.autoConfirmed = true;
+            adminOrder.confirmMethod = 'trade_query';
+            saveMerchantFile(m.id, 'orders', rt.orders);
+            const cOrder = rt.cashierOrders.get(outTradeNo) || {};
+            cOrder.status = 'paid'; cOrder.tradeNo = tradeNo;
+            rt.cashierOrders.set(outTradeNo, cOrder);
+            // 停止自动确认任务（如果正在运行）
+            if (autoConfirmJobs.has(outTradeNo)) autoConfirmJobs.delete(outTradeNo);
+            return res.json({ code: 'OK', status: 'paid', trade_no: tradeNo, amount: adminOrder.amount });
+          }
+          // 首次查询到，更新为"支付中"
+          if (adminOrder.status === 'generated') {
+            adminOrder.status = 'paying';
+            saveMerchantFile(m.id, 'orders', rt.orders);
+          }
+          return res.json({ code: 'OK', status: 'waiting', trade_status: tradeStatus });
+        }
+        // 订单不存在（TRADE_NOT_EXIST），可能是还没在支付宝创建
+        return res.json({ code: 'OK', status: adminOrder.status === 'generated' ? 'waiting' : adminOrder.status });
+      } catch (err) {
+        // trade.query 异常，回退到本地状态查询
+        console.log('[UID+SDK] check trade.query异常: ' + err.message);
+      }
+    }
+
     // 用户已报告支付完成（从支付宝返回），待确认
     if (adminOrder.status === 'pending_confirm') {
       var job = autoConfirmJobs.get(outTradeNo);
@@ -2147,13 +2233,16 @@ app.get('/m/:id/api/network-info', (req, res) => {
 
 app.get('/m/:id/api/config', (req, res) => {
   const m = req.merchant;
+  const rt = req.runtime;
   const uidMasked = m.alipayUid ? m.alipayUid.slice(0, 4) + '****' + m.alipayUid.slice(-4) : '未配置';
   res.json({
     code: 'OK',
     data: {
       alipayUid: uidMasked,
       hasUid: !!m.alipayUid,
-      hasPaymentApi: false,
+      hasPaymentApi: !!rt.alipaySdk,
+      hasSdk: !!rt.alipaySdk,
+      useTradeApi: (m.type === 'uid' || m.type === 'uid-simple') && !!rt.alipaySdk,
       merchantName: m.merchantName || '未配置',
       type: (m.type === 'face' ? 'face2face' : (m.type || 'face2face')),
       uid: m.alipayUid || '',
