@@ -136,12 +136,12 @@
       </div>
     </div>
 
-    <!-- 支付成功视图（从支付宝返回后显示） -->
+    <!-- 支付确认视图（从支付宝返回后显示） -->
     <div class="success-view" id="successView">
-      <div class="success-icon">✓</div>
-      <div class="status-text">支付完成</div>
+      <div class="success-icon" id="successIcon">?</div>
+      <div class="status-text" id="successTitle">支付确认中</div>
       <div class="amount" style="margin-top:12px;margin-bottom:20px;" id="successAmount">¥0.00</div>
-      <div class="status-sub">系统已通知商户确认到账，请稍候</div>
+      <div class="status-sub" id="successSub">系统正在确认您的支付结果，请稍候</div>
       <div class="report-status" id="reportStatus">✓ 已通知商户</div>
       <div class="done-note">
         <span style="color:rgba(212,175,55,0.4)">●</span> 您可点击左上角返回商家页面<br>
@@ -228,13 +228,68 @@
     send();
   }
 
-  // ===== 显示支付成功视图 =====
-  function showSuccess() {
+  // ===== 显示"支付确认中"视图（用户从支付宝返回，尚未确认是否真的支付成功）=====
+  function showConfirming() {
     document.getElementById('jumpView').classList.add('hide');
     document.getElementById('successView').classList.add('show');
-    document.title = '黑金PAY · 支付完成';
+    document.getElementById('successIcon').textContent = '?';
+    document.getElementById('successIcon').style.background = 'linear-gradient(135deg, #d4af37, #b8860b)';
+    document.getElementById('successTitle').textContent = '支付确认中';
+    document.getElementById('successSub').textContent = '系统正在确认您的支付结果，请稍候';
+    document.title = '黑金PAY · 支付确认中';
     // 延迟 500ms 报告，确保页面已稳定
     setTimeout(reportPaid, 500);
+    // 1秒后开始轮询检查支付状态
+    setTimeout(checkPaymentStatus, 1000);
+  }
+
+  // ===== 支付确认成功，切换为"支付完成" =====
+  function showConfirmed() {
+    document.getElementById('successIcon').textContent = '\u2713';
+    document.getElementById('successIcon').style.background = 'linear-gradient(135deg, #52c41a, #389e0d)';
+    document.getElementById('successTitle').textContent = '支付完成';
+    document.getElementById('successSub').textContent = '系统已确认支付成功';
+    document.title = '黑金PAY · 支付完成';
+    if (checkTimer) { clearTimeout(checkTimer); checkTimer = null; }
+  }
+
+  // ===== 轮询检查支付状态 =====
+  var checkCount = 0;
+  var maxChecks = 8; // 最多检查8次，每次间隔1.5秒，共12秒
+  var checkTimer = null;
+
+  function checkPaymentStatus() {
+    if (!orderId) return;
+    checkCount++;
+    var apiUrl = '../cashier/check?out_trade_no=' + encodeURIComponent(orderId);
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', apiUrl, true);
+      xhr.timeout = 5000;
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+          try {
+            var data = JSON.parse(xhr.responseText);
+            if (data.status === 'paid') {
+              showConfirmed();
+              return;
+            }
+          } catch(e) {}
+          if (checkCount < maxChecks) {
+            checkTimer = setTimeout(checkPaymentStatus, 1500);
+          }
+        }
+      };
+      xhr.ontimeout = function() {
+        if (checkCount < maxChecks) { checkTimer = setTimeout(checkPaymentStatus, 1500); }
+      };
+      xhr.onerror = function() {
+        if (checkCount < maxChecks) { checkTimer = setTimeout(checkPaymentStatus, 1500); }
+      };
+      xhr.send();
+    } catch(e) {
+      if (checkCount < maxChecks) { checkTimer = setTimeout(checkPaymentStatus, 1500); }
+    }
   }
 
   // ===== 尝试打开支付宝 =====
@@ -249,8 +304,8 @@
     if (document.visibilityState === 'hidden') {
       hasHidden = true;
     } else if (hasHidden) {
-      // 用户已从支付宝返回，显示支付完成页面
-      showSuccess();
+      // 用户已从支付宝返回，先显示"支付确认中"，轮询后确认才显示"支付完成"
+      showConfirming();
     }
   });
 

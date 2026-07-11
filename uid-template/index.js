@@ -1172,7 +1172,7 @@ function getMerchantNameByPhone(phone) {
 }
 
 // 加载安全配置（支持数据库或本地文件）
-(async () => {
+async function loadSecurity() {
   if (pgPool) {
     try {
       const result = await pgPool.query("SELECT value FROM app_data WHERE key = 'security'");
@@ -1208,7 +1208,7 @@ function getMerchantNameByPhone(phone) {
   if (!securityConfig.merchantPassword && CONFIG.merchantPassword) {
     securityConfig.merchantPassword = CONFIG.merchantPassword;
   }
-})();
+}
 
 async function saveSecurity() {
   if (pgPool) {
@@ -1595,6 +1595,7 @@ app.get('/pay/', (req, res) => {
   const amount = parseFloat(req.query.amount) || 0;
   const memo = req.query.memo || '';
   const uid = req.query.uid || CONFIG.alipayUid;
+  const orderId = req.query.order || '';
 
   if (!amount || !uid) {
     return res.status(400).send('参数不完整');
@@ -1739,12 +1740,13 @@ app.get('/pay/', (req, res) => {
       </div>
     </div>
 
-    <!-- 支付成功视图（从支付宝返回后显示） -->
+    <!-- 支付确认视图（从支付宝返回后显示） -->
     <div class="success-view" id="successView">
-      <div class="success-icon">✓</div>
-      <div class="status-text">支付完成</div>
+      <div class="success-icon" id="successIcon">?</div>
+      <div class="status-text" id="successTitle">支付确认中</div>
       <div class="amount" style="margin-top:12px;margin-bottom:20px;">¥${amount.toFixed(2)}</div>
-      <div class="status-sub">如已完成付款，请通知商户确认到账</div>
+      <div class="status-sub" id="successSub">系统正在确认您的支付结果，请稍候</div>
+      <div class="report-status" id="reportStatus" style="font-size:11px;color:rgba(82,196,26,0.5);margin-top:12px;display:none;">✓ 已通知商户</div>
       <div class="done-note">
         <span style="color:rgba(212,175,55,0.4)">●</span> 您可点击左上角返回商家页面<br>
         <span style="color:rgba(212,175,55,0.4)">●</span> 或关闭当前页面
@@ -1759,11 +1761,91 @@ app.get('/pay/', (req, res) => {
     ];
     var triedIndex = 0;
     var hasHidden = false;
+    var hasReported = false;
+    var orderId = '${orderId}';
+    var checkCount = 0;
+    var maxChecks = 8;
+    var checkTimer = null;
 
-    function showSuccess() {
+    // ===== 向服务器报告支付完成 =====
+    function reportPaid() {
+      if (hasReported || !orderId) return;
+      hasReported = true;
+      var apiUrl = '../cashier/report-paid';
+      var retried = false;
+      function send() {
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', apiUrl, true);
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.timeout = 5000;
+          xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+              if (xhr.status === 200) {
+                var rs = document.getElementById('reportStatus');
+                if (rs) rs.style.display = 'block';
+              } else if (!retried) {
+                retried = true; setTimeout(send, 2000);
+              }
+            }
+          };
+          xhr.ontimeout = function() { if (!retried) { retried = true; setTimeout(send, 2000); } };
+          xhr.onerror = function() { if (!retried) { retried = true; setTimeout(send, 2000); } };
+          xhr.send(JSON.stringify({ outTradeNo: orderId }));
+        } catch(e) {
+          if (!retried) { retried = true; setTimeout(send, 2000); }
+        }
+      }
+      send();
+    }
+
+    // ===== 显示"支付确认中"视图 =====
+    function showConfirming() {
       document.getElementById('jumpView').classList.add('hide');
       document.getElementById('successView').classList.add('show');
+      document.getElementById('successIcon').textContent = '?';
+      document.getElementById('successIcon').style.background = 'linear-gradient(135deg, #d4af37, #b8860b)';
+      document.getElementById('successTitle').textContent = '支付确认中';
+      document.getElementById('successSub').textContent = '系统正在确认您的支付结果，请稍候';
+      document.title = '黑金PAY · 支付确认中';
+      setTimeout(reportPaid, 500);
+      setTimeout(checkPaymentStatus, 1000);
+    }
+
+    // ===== 支付确认成功 =====
+    function showConfirmed() {
+      document.getElementById('successIcon').textContent = '\\u2713';
+      document.getElementById('successIcon').style.background = 'linear-gradient(135deg, #52c41a, #389e0d)';
+      document.getElementById('successTitle').textContent = '支付完成';
+      document.getElementById('successSub').textContent = '系统已确认支付成功';
       document.title = '黑金PAY · 支付完成';
+      if (checkTimer) { clearTimeout(checkTimer); checkTimer = null; }
+    }
+
+    // ===== 轮询检查支付状态 =====
+    function checkPaymentStatus() {
+      if (!orderId) return;
+      checkCount++;
+      var apiUrl = '../cashier/check?out_trade_no=' + encodeURIComponent(orderId);
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', apiUrl, true);
+        xhr.timeout = 5000;
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4 && xhr.status === 200) {
+            try {
+              var data = JSON.parse(xhr.responseText);
+              if (data.status === 'paid') { showConfirmed(); return; }
+            } catch(e) {}
+            if (checkCount < maxChecks) { checkTimer = setTimeout(checkPaymentStatus, 1500); }
+          }
+        };
+        xhr.ontimeout = function() { if (checkCount < maxChecks) { checkTimer = setTimeout(checkPaymentStatus, 1500); } };
+        xhr.onerror = function() { if (checkCount < maxChecks) { checkTimer = setTimeout(checkPaymentStatus, 1500); } };
+        xhr.send();
+      } catch(e) {
+        if (checkCount < maxChecks) { checkTimer = setTimeout(checkPaymentStatus, 1500); }
+      }
     }
 
     function tryOpen() {
@@ -1778,8 +1860,8 @@ app.get('/pay/', (req, res) => {
       if (document.visibilityState === 'hidden') {
         hasHidden = true;
       } else if (hasHidden) {
-        // 用户已经从支付宝返回，显示支付完成页面
-        showSuccess();
+        // 用户已从支付宝返回，先显示"支付确认中"，轮询确认后才显示"支付完成"
+        showConfirming();
       }
     });
 
