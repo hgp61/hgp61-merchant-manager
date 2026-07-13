@@ -157,6 +157,7 @@
   var memo = params.get('memo') || '';
   var uid = params.get('uid') || '';
   var orderId = params.get('order') || '';
+  var alipaysUrlParam = params.get('alipays_url') || '';
 
   // 显示金额和备注
   document.getElementById('amountDisplay').textContent = '\u00a5' + amount.toFixed(2);
@@ -165,7 +166,7 @@
     document.getElementById('memoDisplay').textContent = memo;
   }
 
-  if (!amount || !uid) {
+  if (!amount || (!uid && !alipaysUrlParam)) {
     document.getElementById('spinner').style.display = 'none';
     document.getElementById('statusText').textContent = '参数不完整';
     document.getElementById('statusSub').textContent = '请重新扫描二维码';
@@ -173,15 +174,20 @@
   }
 
   // ===== 生成支付宝跳转链接（多 appId 兜底） =====
-  var bizData = JSON.stringify({ s: 'money', u: uid, a: amount.toFixed(2), m: memo });
-  var encodedBiz = encodeURIComponent(bizData);
-  var alipayUrls = [
-    'alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=' + encodedBiz,
-    'alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + encodedBiz
-  ];
+  var alipayUrls = [];
+  if (alipaysUrlParam) {
+    // 多通道组：后端已组装好 alipays:// 链接，直接使用
+    alipayUrls.push(alipaysUrlParam);
+    alipayUrls.push(alipaysUrlParam);
+  } else {
+    var bizData = JSON.stringify({ s: 'money', u: uid, a: amount.toFixed(2), m: memo });
+    var encodedBiz = encodeURIComponent(bizData);
+    alipayUrls.push('alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=' + encodedBiz);
+    alipayUrls.push('alipays://platformapi/startapp?appId=20000123&actionType=scan&biz_data=' + encodedBiz);
+  }
 
-  // 设置手动按钮链接（使用第二个 URL 作为备选）
-  document.getElementById('payBtn').href = alipayUrls[1];
+  // 设置手动按钮链接
+  document.getElementById('payBtn').href = alipayUrls[alipayUrls.length - 1];
 
   var triedIndex = 0;
   var hasHidden = false;

@@ -1065,6 +1065,8 @@
 const API_BASE = '';
 let IS_SIMPLE = false; // 是否为 UID 简易支付模式（页面加载后通过 api/config 获取）
 let MERCHANT_UID = ''; // 商户支付宝 UID（从 api/config 获取）
+let IS_GROUP = false;  // 是否为多通道组收银台（组级配置中返回 isGroup）
+let GROUP_ID = '';     // 多通道组 ID
 
 // ==================== 状态 ====================
 let currentOutTradeNo = '';
@@ -1100,6 +1102,8 @@ async function initPayButton() {
       const d = json.data;
       IS_SIMPLE = d.type === 'uid-simple';
       MERCHANT_UID = d.uid || '';
+      IS_GROUP = d.isGroup === true;
+      GROUP_ID = d.groupId || '';
     }
   } catch (e) {}
   setPayButtonText();
@@ -1196,27 +1200,35 @@ async function createQRCode() {
   }
 
   // ===== UID 简易支付：创建订单后跳 /pay 页面，带上订单号用于回传 =====
-  if (IS_SIMPLE && MERCHANT_UID) {
+  if (IS_SIMPLE && (MERCHANT_UID || IS_GROUP)) {
     const payBtn = document.getElementById('payBtn');
     payBtn.disabled = true;
     payBtn.textContent = '正在创建订单...';
 
     // 创建订单（等待完成，获取订单号后再跳转）
+    let qrcodeRes = null;
     try {
       const res = await fetch(`${API_BASE}cashier/qrcode`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount, subject, base_url: window.location.origin })
       });
-      const data = await res.json();
-      if (data.code === 'OK') {
-        currentOutTradeNo = data.out_trade_no;
+      qrcodeRes = await res.json();
+      if (qrcodeRes.code === 'OK') {
+        currentOutTradeNo = qrcodeRes.out_trade_no;
       }
     } catch (e) {}
 
     // 跳转到 /pay 页面，带上订单号，pay/index.html 负责跳转支付宝和回传支付完成
     const orderParam = currentOutTradeNo ? `&order=${encodeURIComponent(currentOutTradeNo)}` : '';
-    window.location.href = `${API_BASE}pay/?amount=${encodeURIComponent(amount)}&uid=${encodeURIComponent(MERCHANT_UID)}&memo=${encodeURIComponent(subject)}${orderParam}`;
+    if (IS_GROUP) {
+      // 多通道组：使用后端返回的 UID / alipays_url，轮询选中的 slot 会变化
+      const uid = (qrcodeRes && qrcodeRes.uid) ? encodeURIComponent(qrcodeRes.uid) : '';
+      const alipaysUrl = (qrcodeRes && qrcodeRes.alipays_url) ? encodeURIComponent(qrcodeRes.alipays_url) : '';
+      window.location.href = `${API_BASE}pay/?amount=${encodeURIComponent(amount)}&uid=${uid}&alipays_url=${alipaysUrl}&memo=${encodeURIComponent(subject)}${orderParam}`;
+    } else {
+      window.location.href = `${API_BASE}pay/?amount=${encodeURIComponent(amount)}&uid=${encodeURIComponent(MERCHANT_UID)}&memo=${encodeURIComponent(subject)}${orderParam}`;
+    }
 
     return;
   }
