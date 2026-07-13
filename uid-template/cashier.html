@@ -1232,9 +1232,13 @@ async function createQRCode() {
     var isAlipayBrowser = /AlipayClient/i.test(navigator.userAgent);
 
     if (isAlipayBrowser && alipaysUrl) {
-      // 支付宝内置浏览器：alipays:// scheme 被完全拦截
-      // 方案：通过支付宝官方 render.alipay.com 中转页打开 scheme
-      var renderUrl = 'https://render.alipay.com/p/s/i/?scheme=' + encodeURIComponent(alipaysUrl);
+      // 支付宝内置浏览器：alipays:// scheme 被拦截，render.alipay.com 会回首页
+      // 正确方案：使用 AlipayJSBridge.call('startApp') 原生 JSAPI（用 param 对象，不是 query 字符串）
+
+      // 解析 UID（从 qrcodeRes 或 alipaysUrl 中提取）
+      var payUid = (qrcodeRes && qrcodeRes.uid) ? qrcodeRes.uid : MERCHANT_UID;
+      var bizDataObj = { s: 'money', u: payUid, a: parseFloat(amount).toFixed(2), m: subject };
+      var bizDataStr = JSON.stringify(bizDataObj);
 
       // 显示"正在打开支付宝"状态
       document.getElementById('inputSection').style.display = 'none';
@@ -1246,51 +1250,119 @@ async function createQRCode() {
       document.getElementById('payAmount').textContent = '\u00a5' + parseFloat(amount).toFixed(2);
       document.getElementById('paySubject').textContent = subject;
       var qrBox = document.querySelector('#paySection .qr-box');
-      if (qrBox) {
-        qrBox.innerHTML = '<div style="padding:40px 20px;text-align:center;"><div class="spinner" style="margin-bottom:20px;"></div><div style="font-size:14px;color:rgba(212,175,55,0.7);">正在跳转支付宝...</div></div>';
-      }
       var payTipEl = document.getElementById('payTip');
-      if (payTipEl) payTipEl.innerHTML = '<span class="dot"></span> 正在跳转支付宝，请勿关闭页面...';
       var btnGroup = document.querySelector('#paySection .btn-group');
       if (btnGroup) btnGroup.innerHTML = '';
 
       // 存储到全局变量供重试按钮使用
-      window._renderUrl = renderUrl;
+      window._alipayBizData = bizDataStr;
       window._alipaysUrl = alipaysUrl;
+      window._payUid = payUid;
 
-      // 方案1：尝试 AlipayJSBridge.pushWindow（可能直接处理 alipays://）
-      var bridgeTried = false;
-      function tryPushWindow() {
-        if (window.AlipayJSBridge) {
-          try {
-            AlipayJSBridge.call('pushWindow', { url: alipaysUrl });
-            bridgeTried = true;
-            return true;
-          } catch(e) {
-            console.log('pushWindow failed:', e);
-          }
+      // 调试日志函数（显示在页面上）
+      function debugLog(msg) {
+        console.log('[AlipayPay] ' + msg);
+        if (payTipEl) {
+          payTipEl.innerHTML = '<span class="dot"></span> ' + msg;
         }
-        return false;
       }
 
-      // AlipayJSBridgeReady 后尝试 pushWindow
+      // 核心函数：使用 AlipayJSBridge.startApp 打开扫一扫转账页面
+      function tryStartApp() {
+        if (!window.AlipayJSBridge) {
+          debugLog('AlipayJSBridge 未就绪，等待中...');
+          return false;
+        }
+        try {
+          debugLog('正在调用 startApp...');
+          // 正确格式：用 param 对象，不是 query 字符串
+          AlipayJSBridge.call('startApp', {
+            appId: '20000674',
+            param: {
+              actionType: 'scan',
+              biz_data: bizDataStr
+            }
+          }, function(result) {
+            debugLog('startApp 回调: ' + JSON.stringify(result));
+          });
+          debugLog('startApp 已调用，等待跳转...');
+          return true;
+        } catch(e) {
+          debugLog('startApp 错误: ' + e.message);
+          return false;
+        }
+      }
+
+      // 备选方案1：pushWindow 打开 alipays:// URL
+      function tryPushWindow() {
+        if (!window.AlipayJSBridge) return false;
+        try {
+          debugLog('尝试 pushWindow...');
+          AlipayJSBridge.call('pushWindow', { url: alipaysUrl });
+          return true;
+        } catch(e) {
+          debugLog('pushWindow 错误: ' + e.message);
+          return false;
+        }
+      }
+
+      // 备选方案2：打开支付宝转账 H5 页面（用 20000067 Nebula 容器）
+      function tryOpenTransferH5() {
+        if (!window.AlipayJSBridge) return false;
+        try {
+          debugLog('尝试打开转账页...');
+          // 用 20000067 打开一个 H5 转账页面
+          var transferUrl = 'https://render.alipay.com/p/h5/cashier.html?uid=' + payUid + '&amount=' + parseFloat(amount).toFixed(2) + '&memo=' + encodeURIComponent(subject);
+          AlipayJSBridge.call('startApp', {
+            appId: '20000067',
+            param: { url: transferUrl }
+          }, function(result) {
+            debugLog('openH5 回调: ' + JSON.stringify(result));
+          });
+          return true;
+        } catch(e) {
+          debugLog('openH5 错误: ' + e.message);
+          return false;
+        }
+      }
+
+      // 执行跳转：startApp → pushWindow → H5
+      function doAlipayRedirect() {
+        var ok = tryStartApp();
+        if (!ok) {
+          // 如果 startApp 失败，500ms 后尝试 pushWindow
+          setTimeout(function() {
+            if (document.visibilityState === 'visible') {
+              tryPushWindow();
+            }
+          }, 500);
+        }
+      }
+
+      // AlipayJSBridge 就绪后执行
       if (window.AlipayJSBridge) {
-        tryPushWindow();
+        debugLog('AlipayJSBridge 已就绪');
+        doAlipayRedirect();
       } else {
+        debugLog('等待 AlipayJSBridge 就绪...');
         document.addEventListener('AlipayJSBridgeReady', function() {
-          tryPushWindow();
+          debugLog('AlipayJSBridgeReady 事件触发');
+          doAlipayRedirect();
         }, false);
+        // 1秒后如果还没就绪，尝试直接调用（可能 bridge 已存在但事件没触发）
+        setTimeout(function() {
+          if (!window.AlipayJSBridge && document.visibilityState === 'visible') {
+            debugLog('AlipayJSBridge 不可用，尝试直接跳转...');
+            // 最后手段：直接 location.href
+            try { window.location.href = alipaysUrl; } catch(e) {}
+          }
+        }, 1500);
       }
-
-      // 方案2：跳转到 render.alipay.com 中转页（300ms 后执行，给 pushWindow 一个机会）
-      setTimeout(function() {
-        window.location.href = renderUrl;
-      }, 300);
 
       // 3秒后如果仍在当前页面，显示手动按钮
       setTimeout(function() {
         if (document.visibilityState === 'visible') {
-          if (payTipEl) payTipEl.innerHTML = '<span class="dot"></span> 如未跳转，请点击下方按钮重试';
+          debugLog('仍在当前页面，显示重试按钮');
           if (btnGroup) {
             btnGroup.innerHTML = '<button style="background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;width:100%;margin-bottom:10px;" onclick="retryAlipayOpen()">重新打开支付宝</button>';
           }
@@ -1437,20 +1509,40 @@ function reportPaidUid() {
 
 // ==================== UID 直付：重试打开支付宝 ====================
 function retryAlipayOpen() {
-  var renderUrl = window._renderUrl || '';
+  var bizData = window._alipayBizData || '';
   var alipaysUrl = window._alipaysUrl || '';
-  // 优先使用 AlipayJSBridge.pushWindow
+  var tip = document.getElementById('payTip');
+
+  // 方案1：AlipayJSBridge.startApp（正确格式：param 对象）
+  if (window.AlipayJSBridge && bizData) {
+    try {
+      if (tip) tip.innerHTML = '<span class="dot"></span> 正在调用 startApp...';
+      AlipayJSBridge.call('startApp', {
+        appId: '20000674',
+        param: {
+          actionType: 'scan',
+          biz_data: bizData
+        }
+      }, function(result) {
+        if (tip) tip.innerHTML = '<span class="dot"></span> startApp 回调: ' + JSON.stringify(result);
+      });
+      return;
+    } catch(e) {
+      if (tip) tip.innerHTML = '<span class="dot"></span> startApp 错误: ' + e.message;
+    }
+  }
+
+  // 方案2：pushWindow
   if (window.AlipayJSBridge && alipaysUrl) {
     try {
       AlipayJSBridge.call('pushWindow', { url: alipaysUrl });
       return;
     } catch(e) {}
   }
-  // 备选：跳转 render.alipay.com 中转页
-  if (renderUrl) {
-    window.location.href = renderUrl;
-  } else if (alipaysUrl) {
-    window.location.href = 'https://render.alipay.com/p/s/i/?scheme=' + encodeURIComponent(alipaysUrl);
+
+  // 方案3：直接 location.href
+  if (alipaysUrl) {
+    try { window.location.href = alipaysUrl; } catch(e) {}
   }
 }
 
