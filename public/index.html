@@ -898,9 +898,9 @@
         <tr>
           <th>组名称</th>
           <th>登录手机号</th>
-          <th>组 ID</th>
           <th>槽位商户（轮询顺序）</th>
-          <th>收银台链接</th>
+          <th>收银台</th>
+          <th>管理后台</th>
           <th>创建时间</th>
           <th>操作</th>
         </tr>
@@ -1343,6 +1343,7 @@ function renderGroups() {
     const date = new Date(g.createdAt);
     const dateStr = `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
     const cashierUrl = `${window.location.origin}/g/${g.id}/cashier.html`;
+    const adminUrl = `${window.location.origin}/g/${g.id}/admin.html`;
     const slotPills = (g.merchants || []).map((m, i) => {
       const idx = m.slotIndex !== undefined ? m.slotIndex : i;
       const typeLabel = (m.type === 'uid' || m.type === 'uid-simple') ? 'UID' : '当面付';
@@ -1355,9 +1356,9 @@ function renderGroups() {
       <tr>
         <td class="group-name-cell">${escapeHtml(g.name)}</td>
         <td>${escapeHtml(g.phone || '')}</td>
-        <td class="group-id-cell">${escapeHtml(g.id)}</td>
         <td>${slotPills}</td>
-        <td><a class="cashier-link" href="${cashierUrl}" target="_blank">${cashierUrl.replace(/^https?:\/\//, '')}</a></td>
+        <td><a class="cashier-link" href="${cashierUrl}" target="_blank">收银台</a></td>
+        <td><a class="cashier-link" href="${adminUrl}" target="_blank" style="color:var(--gold);">登录后台</a></td>
         <td class="merchant-date">${dateStr}</td>
         <td>
           <div class="action-btns">
@@ -1448,8 +1449,12 @@ async function openGroupDetail(id) {
       <div class="detail-value gold">槽 ${nextIdx + 1}${enabledCount === 0 ? '（已全部禁用）' : ''}</div>
     </div>
     <div class="detail-item detail-full">
-      <div class="detail-label">收银台链接</div>
+      <div class="detail-label">收银台链接（扫码收款 · 轮询）</div>
       <div class="detail-value"><a class="cashier-link" href="${cashierUrl}" target="_blank">${cashierUrl}</a></div>
+    </div>
+    <div class="detail-item detail-full">
+      <div class="detail-label">管理后台（手机号 ${escapeHtml(g.phone || '')} 登录）</div>
+      <div class="detail-value"><a class="cashier-link" href="${window.location.origin}/g/${g.id}/admin.html" target="_blank" style="color:var(--gold);">${window.location.origin}/g/${g.id}/admin.html</a></div>
     </div>
     <div class="detail-full" style="margin-top:12px;">
       <div class="detail-label" style="color:var(--gold);margin-bottom:8px;">槽位详情（按轮询顺序）</div>
@@ -1464,7 +1469,7 @@ async function openGroupDetail(id) {
                 <div class="slot-detail-name">槽 ${idx + 1} · ${escapeHtml(m.merchantName || '')}</div>
                 <div>${isNext ? '<span class="group-slot-pill next">下一笔</span>' : ''}</div>
               </div>
-              <div class="slot-detail-type">${typeLabel} · 手机号 ${escapeHtml(m.phone || '')}</div>
+              <div class="slot-detail-type">${typeLabel}</div>
               <div style="margin-top:6px;font-size:11px;color:var(--text-dim);">
                 状态：
                 <label class="merchant-toggle" style="vertical-align:middle;">

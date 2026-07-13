@@ -1072,12 +1072,12 @@ app.post('/api/admin/change-password', requireAuth, (req, res) => {
 });
 
 app.get('/api/merchants', requireAuth, (req, res) => {
-  const list = loadMerchants().map(m => ({ ...m, password: undefined }));
+  const list = loadMerchants().filter(m => !m.groupId).map(m => ({ ...m, password: undefined }));
   res.json({ code: 'OK', data: list });
 });
 
 app.get('/api/stats', requireAuth, (req, res) => {
-  const list = loadMerchants();
+  const list = loadMerchants().filter(m => !m.groupId);
   const today = new Date().toDateString();
   const todayCount = list.filter(m => new Date(m.createdAt).toDateString() === today).length;
   res.json({ code: 'OK', data: { total: list.length, today: todayCount } });
