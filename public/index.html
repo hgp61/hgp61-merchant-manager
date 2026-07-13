@@ -343,16 +343,221 @@
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 16px;
-    width: 480px; max-width: 92vw;
+    width: 580px; max-width: 94vw;
+    max-height: 92vh;
+    overflow-y: auto;
     box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 30px rgba(212,175,55,0.1);
     animation: modalIn 0.3s ease;
-    padding: 32px 28px;
+    padding: 28px 24px;
   }
   .type-select-title {
     text-align: center; font-size: 18px; font-weight: 800;
     background: linear-gradient(90deg, var(--gold-light), var(--gold));
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    margin-bottom: 28px;
+    margin-bottom: 16px;
+  }
+
+  /* ===== 进件模式菜单栏 ===== */
+  .mode-tabs {
+    display: flex; gap: 6px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+  .mode-tab {
+    flex: 1; text-align: center;
+    padding: 10px 0;
+    font-size: 14px; font-weight: 700;
+    color: var(--text-dim);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.25s;
+    user-select: none;
+  }
+  .mode-tab:hover { color: var(--text); }
+  .mode-tab.active {
+    background: linear-gradient(135deg, var(--gold), rgba(212,175,55,0.7));
+    color: #000;
+    box-shadow: 0 2px 10px rgba(212,175,55,0.3);
+  }
+
+  /* ===== 多通道进件面板 ===== */
+  .multi-channel-panel { animation: panelIn 0.3s ease; }
+  @keyframes panelIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .slot-item {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 14px 12px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .slot-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .slot-title {
+    font-size: 13px; font-weight: 700;
+    color: var(--gold);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .slot-title .slot-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold), rgba(212,175,55,0.6));
+    color: #000; font-size: 12px; font-weight: 900;
+  }
+  .slot-remove {
+    background: rgba(231,76,60,0.1);
+    color: var(--red);
+    border: 1px solid rgba(231,76,60,0.25);
+    padding: 3px 10px; border-radius: 6px;
+    font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .slot-remove:hover { background: rgba(231,76,60,0.25); border-color: var(--red); }
+  .slot-type-pills {
+    display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .slot-type-pill {
+    flex: 1; min-width: 0;
+    padding: 7px 0;
+    text-align: center;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-dim);
+    background: rgba(0,0,0,0.25);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .slot-type-pill:hover { color: var(--text); border-color: var(--gold-dim); }
+  .slot-type-pill.active {
+    background: rgba(212,175,55,0.15);
+    color: var(--gold);
+    border-color: var(--gold);
+  }
+  .slot-fields .form-group { margin-bottom: 10px; }
+  .slot-fields .form-group:last-child { margin-bottom: 0; }
+  .slot-fields .form-label { font-size: 12px; }
+  .slot-fields .form-hint { font-size: 10px; }
+  .btn-add-slot {
+    width: 100%;
+    padding: 10px;
+    background: rgba(212,175,55,0.06);
+    border: 1px dashed rgba(212,175,55,0.4);
+    color: var(--gold);
+    border-radius: 10px;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s;
+    margin-top: 4px;
+  }
+  .btn-add-slot:hover {
+    background: rgba(212,175,55,0.12);
+    border-color: var(--gold);
+  }
+  .multi-channel-hint {
+    margin-top: 14px; padding: 10px 12px;
+    background: rgba(52,152,219,0.06);
+    border: 1px solid rgba(52,152,219,0.18);
+    border-radius: 8px;
+    color: #5dade2;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  /* ===== 多通道组列表（主页面） ===== */
+  .group-section {
+    padding: 0 32px 48px;
+  }
+  .group-table-wrap {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .group-table { width: 100%; border-collapse: collapse; }
+  .group-table th {
+    text-align: left; padding: 14px 16px;
+    font-size: 12px; color: var(--text-dim);
+    font-weight: 600; letter-spacing: 1px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(212,175,55,0.03);
+  }
+  .group-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 14px;
+  }
+  .group-table tr:last-child td { border-bottom: none; }
+  .group-table tr:hover { background: var(--bg-hover); }
+  .group-name-cell { color: var(--gold-light); font-weight: 700; }
+  .group-id-cell {
+    font-family: 'Consolas', monospace; font-size: 11px;
+    color: var(--text-dim);
+  }
+  .group-slot-pill {
+    display: inline-block; padding: 2px 8px;
+    background: rgba(212,175,55,0.1);
+    color: var(--gold);
+    border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 4px;
+    font-size: 10px; font-weight: 700;
+    margin-right: 4px; margin-bottom: 4px;
+  }
+  .group-slot-pill.disabled {
+    background: rgba(231,76,60,0.08);
+    color: var(--red);
+    border-color: rgba(231,76,60,0.2);
+    text-decoration: line-through;
+  }
+  .group-slot-pill.next {
+    background: linear-gradient(135deg, var(--gold), rgba(212,175,55,0.6));
+    color: #000;
+    border: none;
+    box-shadow: 0 0 10px rgba(212,175,55,0.4);
+  }
+  .group-slot-pill.next.disabled {
+    background: rgba(120,120,120,0.2);
+    color: #999;
+    box-shadow: none;
+  }
+  .cashier-link {
+    color: var(--gold);
+    text-decoration: none;
+    font-family: 'Consolas', monospace;
+    font-size: 12px;
+  }
+  .cashier-link:hover { text-decoration: underline; }
+
+  /* ===== 多通道组详情弹窗 ===== */
+  .group-detail-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .slot-detail-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .slot-detail-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .slot-detail-name {
+    font-size: 14px; font-weight: 700;
+    color: var(--gold-light);
+  }
+  .slot-detail-type {
+    font-size: 11px;
+    color: var(--text-dim);
   }
   .type-cards {
     display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
@@ -681,11 +886,46 @@
   </div>
 </div>
 
+<!-- 多通道组列表 -->
+<div class="group-section" id="groupSection" style="display:none;">
+  <div class="section-header">
+    <div class="section-title">多通道组（轮询收款）</div>
+    <div class="merchant-count" id="groupCount"></div>
+  </div>
+  <div class="group-table-wrap">
+    <table class="group-table" id="groupTable">
+      <thead>
+        <tr>
+          <th>组名称</th>
+          <th>组 ID</th>
+          <th>槽位商户（轮询顺序）</th>
+          <th>收银台链接</th>
+          <th>创建时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="groupBody"></tbody>
+    </table>
+    <div class="empty-state" id="groupEmptyState" style="display:none;">
+      <div class="empty-icon">🔁</div>
+      <div class="empty-text">暂无多通道组。在「增加商户」弹窗中选择「多通道进件」可创建。</div>
+    </div>
+  </div>
+</div>
+
 <!-- 进件类型选择弹窗 -->
 <div class="type-select-overlay" id="typeSelectModal">
   <div class="type-select-box">
     <div class="type-select-title">选择进件类型</div>
-    <div class="type-cards">
+
+    <!-- 进件模式菜单栏：单通道 / 多通道 -->
+    <div class="mode-tabs" id="modeTabs">
+      <div class="mode-tab active" data-mode="single" onclick="switchAddMode('single')">单通道进件</div>
+      <div class="mode-tab" data-mode="multi" onclick="switchAddMode('multi')">多通道进件</div>
+    </div>
+
+    <!-- 单通道进件：原 4 个类型卡 -->
+    <div class="type-cards" id="singleChannelPanel">
       <div class="type-card" onclick="selectUidType()">
         <div class="type-card-icon">📱</div>
         <div class="type-card-name">UID 固码</div>
@@ -709,6 +949,34 @@
         <div class="type-card-name">当面付动态码</div>
         <div class="type-card-desc">需提供 APPID + 双密钥<br>输入金额即可生成动态码<br>动态支付即付即失效</div>
         <div class="gold-dot"></div>
+      </div>
+    </div>
+
+    <!-- 多通道进件：组名 + 动态槽位列表 + 提交 -->
+    <div class="multi-channel-panel" id="multiChannelPanel" style="display:none;">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label class="form-label form-label-required">多通道组名称</label>
+        <div class="form-hint">例如"轮询收款A组"。同一组内的订单会按顺序轮流落到各槽位商户。</div>
+        <input type="text" class="form-input" id="inputGroupName" placeholder="如：轮询收款A组" style="font-family:inherit;">
+      </div>
+
+      <div class="form-label" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+        <span>槽位商户（至少 2 个）</span>
+        <span class="form-hint" style="margin:0;color:var(--gold);" id="slotCountHint">已配置 2 个</span>
+      </div>
+
+      <div id="slotList"></div>
+
+      <button class="btn-add-slot" onclick="addGroupSlot()">＋ 增加槽位商户</button>
+
+      <div class="multi-channel-hint">
+        💡 多通道说明：每笔订单会按"商户1 → 商户2 → … → 商户N → 商户1"的顺序轮询收款。
+        可混合配置 UID 与 当面付 两种进件类型。
+      </div>
+
+      <div class="modal-footer" style="padding:16px 0 0;border-top:1px solid var(--border);margin-top:18px;">
+        <button class="btn-cancel" onclick="closeAddModal()">取消</button>
+        <button class="btn-submit" id="btnSubmitGroup" onclick="submitGroup()">创建多通道组</button>
       </div>
     </div>
   </div>
@@ -824,6 +1092,24 @@
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeDetailModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 多通道组详情弹窗 -->
+<div class="modal-overlay" id="groupDetailModal">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <div class="modal-title" id="groupDetailTitle">多通道组详情</div>
+      <button class="modal-close" onclick="closeGroupDetailModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid" id="groupDetailGrid">
+        <!-- 动态填充 -->
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeGroupDetailModal()">关闭</button>
     </div>
   </div>
 </div>
@@ -1005,6 +1291,213 @@ async function fetchMerchants() {
   }
 }
 
+// ===== 多通道组 API =====
+let groups = [];
+
+async function fetchGroups() {
+  try {
+    const res = await fetch('/api/groups', { headers: { 'Authorization': getToken() } });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      groups = json.data;
+      renderGroups();
+    } else if (json.code === 'UNAUTH') {
+      doLogout();
+    }
+  } catch (e) {
+    console.error('加载多通道组失败', e);
+  }
+}
+
+function renderGroups() {
+  const section = document.getElementById('groupSection');
+  const body = document.getElementById('groupBody');
+  const empty = document.getElementById('groupEmptyState');
+  const table = document.getElementById('groupTable');
+
+  if (!groups || groups.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+
+  document.getElementById('groupCount').textContent = `共 ${groups.length} 个组`;
+
+  if (groups.length === 0) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    table.style.display = 'none';
+    return;
+  }
+
+  empty.style.display = 'none';
+  table.style.display = '';
+
+  body.innerHTML = groups.map(g => {
+    const date = new Date(g.createdAt);
+    const dateStr = `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+    const cashierUrl = `${window.location.origin}/g/${g.id}/cashier.html`;
+    const slotPills = (g.merchants || []).map((m, i) => {
+      const idx = m.slotIndex !== undefined ? m.slotIndex : i;
+      const typeLabel = (m.type === 'uid' || m.type === 'uid-simple') ? 'UID' : '当面付';
+      const isNext = (idx === (g.nextIndex || 0));
+      const cls = isNext ? 'next' : '';
+      const disabledCls = m.enabled === false ? 'disabled' : '';
+      return `<span class="group-slot-pill ${cls} ${disabledCls}" title="${escapeHtml(m.merchantName)} · ${typeLabel}${m.enabled === false ? ' · 已禁用' : ''}">槽${idx+1} ${typeLabel}</span>`;
+    }).join('');
+    return `
+      <tr>
+        <td class="group-name-cell">${escapeHtml(g.name)}</td>
+        <td class="group-id-cell">${escapeHtml(g.id)}</td>
+        <td>${slotPills}</td>
+        <td><a class="cashier-link" href="${cashierUrl}" target="_blank">${cashierUrl.replace(/^https?:\/\//, '')}</a></td>
+        <td class="merchant-date">${dateStr}</td>
+        <td>
+          <div class="action-btns">
+            <button class="btn-detail" onclick="openGroupDetail('${g.id}')">详情</button>
+            <button class="btn-del" onclick="askDeleteGroup('${g.id}', '${escapeHtml(g.name)}')">删除</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+let deleteGroupId = null;
+function askDeleteGroup(id, name) {
+  deleteGroupId = id;
+  document.getElementById('confirmText').textContent = `确定删除多通道组「${name}」？组内所有槽位商户也会一并删除，无法恢复。`;
+  document.getElementById('confirmModal').classList.add('show');
+}
+
+// 复用 confirmDelete：检测是删除组还是商户
+async function confirmDelete() {
+  if (deleteGroupId) {
+    const id = deleteGroupId;
+    deleteGroupId = null;
+    try {
+      const res = await fetch(`/api/groups/${id}`, { method: 'DELETE', headers: { 'Authorization': getToken() } });
+      const json = await res.json();
+      if (json.code === 'OK') {
+        showToast('多通道组已删除', 'success');
+        closeConfirm();
+        await fetchMerchants();
+        await fetchGroups();
+      } else {
+        showToast(json.message || '删除失败', 'error');
+      }
+    } catch (e) {
+      showToast('网络错误', 'error');
+    }
+    return;
+  }
+  if (!deleteId) return;
+  try {
+    const res = await fetch(`/api/merchants/${deleteId}`, { method: 'DELETE', headers: { 'Authorization': getToken() } });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      showToast('删除成功', 'success');
+      closeConfirm();
+      await fetchMerchants();
+      await fetchGroups();
+    } else {
+      showToast(json.message || '删除失败', 'error');
+    }
+  } catch (e) {
+    showToast('网络错误', 'error');
+  }
+}
+
+async function openGroupDetail(id) {
+  const g = groups.find(x => x.id === id);
+  if (!g) return;
+  document.getElementById('groupDetailTitle').textContent = `多通道组详情 · ${g.name}`;
+  const cashierUrl = `${window.location.origin}/g/${g.id}/cashier.html`;
+  const nextIdx = g.nextIndex || 0;
+  const enabledCount = (g.merchants || []).filter(m => m.enabled !== false).length;
+  let html = `
+    <div class="detail-item detail-full">
+      <div class="detail-label">组名称</div>
+      <div class="detail-value">${escapeHtml(g.name)}</div>
+    </div>
+    <div class="detail-item">
+      <div class="detail-label">组 ID</div>
+      <div class="detail-value">${escapeHtml(g.id)}</div>
+    </div>
+    <div class="detail-item">
+      <div class="detail-label">创建时间</div>
+      <div class="detail-value">${new Date(g.createdAt).toLocaleString()}</div>
+    </div>
+    <div class="detail-item">
+      <div class="detail-label">槽位数 / 启用数</div>
+      <div class="detail-value">${(g.merchants||[]).length} 个 / ${enabledCount} 个已启用</div>
+    </div>
+    <div class="detail-item">
+      <div class="detail-label">下一笔落点</div>
+      <div class="detail-value gold">槽 ${nextIdx + 1}${enabledCount === 0 ? '（已全部禁用）' : ''}</div>
+    </div>
+    <div class="detail-item detail-full">
+      <div class="detail-label">收银台链接</div>
+      <div class="detail-value"><a class="cashier-link" href="${cashierUrl}" target="_blank">${cashierUrl}</a></div>
+    </div>
+    <div class="detail-full" style="margin-top:12px;">
+      <div class="detail-label" style="color:var(--gold);margin-bottom:8px;">槽位详情（按轮询顺序）</div>
+      <div class="group-detail-grid" style="grid-template-columns:1fr 1fr;">
+        ${(g.merchants || []).map((m, i) => {
+          const idx = m.slotIndex !== undefined ? m.slotIndex : i;
+          const typeLabel = m.type === 'uid' ? 'UID 固码' : m.type === 'uid-simple' ? 'UID 直付' : m.type === 'face2face-dynamic' ? '当面付动态码' : '当面付直付';
+          const isNext = (idx === nextIdx);
+          return `
+            <div class="slot-detail-card">
+              <div class="slot-detail-header">
+                <div class="slot-detail-name">槽 ${idx + 1} · ${escapeHtml(m.merchantName || '')}</div>
+                <div>${isNext ? '<span class="group-slot-pill next">下一笔</span>' : ''}</div>
+              </div>
+              <div class="slot-detail-type">${typeLabel} · 手机号 ${escapeHtml(m.phone || '')}</div>
+              <div style="margin-top:6px;font-size:11px;color:var(--text-dim);">
+                状态：
+                <label class="merchant-toggle" style="vertical-align:middle;">
+                  <input type="checkbox" ${m.enabled !== false ? 'checked' : ''} onchange="toggleGroupSlot('${g.id}','${m.id}', this.checked)">
+                  <span class="toggle-slider"></span>
+                </label>
+                <span style="margin-left:6px;">${m.enabled !== false ? '已启用' : '已禁用'}</span>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+  document.getElementById('groupDetailGrid').innerHTML = html;
+  document.getElementById('groupDetailModal').classList.add('show');
+}
+
+function closeGroupDetailModal() {
+  document.getElementById('groupDetailModal').classList.remove('show');
+}
+
+async function toggleGroupSlot(groupId, slotId, enabled) {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/slots/${slotId}/toggle`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ enabled }),
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      showToast(enabled ? '已启用槽位' : '已禁用槽位', 'success');
+      await fetchGroups();
+      if (document.getElementById('groupDetailModal').classList.contains('show')) {
+        openGroupDetail(groupId);
+      }
+    } else {
+      showToast(json.message || '操作失败', 'error');
+    }
+  } catch (e) {
+    showToast('网络错误', 'error');
+  }
+}
+
 async function fetchStats() {
   try {
     const res = await fetch('/api/stats', { headers: { 'Authorization': getToken() } });
@@ -1103,10 +1596,6 @@ function maskPrivateKey(str) {
 let currentUidAddType = 'uid'; // 'uid' or 'uid-simple'
 let currentFaceType = 'face2face'; // 'face2face' or 'face2face-dynamic'
 
-function openAddModal() {
-  document.getElementById('typeSelectModal').classList.add('show');
-}
-
 function selectUidType() {
   currentUidAddType = 'uid';
   document.getElementById('typeSelectModal').classList.remove('show');
@@ -1159,6 +1648,208 @@ function closeAddModal() {
   document.getElementById('typeSelectModal').classList.remove('show');
   document.getElementById('faceModal').classList.remove('show');
   document.getElementById('uidModal').classList.remove('show');
+}
+
+// ===== 进件模式切换（单/多通道） =====
+let currentAddMode = 'single'; // 'single' | 'multi'
+let groupSlots = []; // 多通道槽位草稿
+
+function openAddModal() {
+  currentAddMode = 'single';
+  switchAddMode('single', false);
+  document.getElementById('typeSelectModal').classList.add('show');
+}
+
+function switchAddMode(mode, reset) {
+  if (reset === undefined) reset = true;
+  currentAddMode = mode;
+  document.querySelectorAll('.mode-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.mode === mode);
+  });
+  document.getElementById('singleChannelPanel').style.display = (mode === 'single') ? '' : 'none';
+  document.getElementById('multiChannelPanel').style.display = (mode === 'multi') ? '' : 'none';
+  if (reset && mode === 'multi') {
+    document.getElementById('inputGroupName').value = '';
+    groupSlots = [
+      createEmptySlot(0, 'uid'),
+      createEmptySlot(1, 'face2face'),
+    ];
+    renderGroupSlots();
+  }
+}
+
+function createEmptySlot(idx, type) {
+  return {
+    idx: idx,
+    type: type,
+    merchantName: '',
+    phone: '',
+    alipayUid: '',
+    appId: '',
+    privateKey: '',
+    alipayPublicKey: '',
+    keyType: 'auto',
+  };
+}
+
+function renderGroupSlots() {
+  const list = document.getElementById('slotList');
+  list.innerHTML = groupSlots.map((s, i) => renderSlotItem(s, i)).join('');
+  document.getElementById('slotCountHint').textContent = `已配置 ${groupSlots.length} 个`;
+}
+
+function renderSlotItem(s, i) {
+  const isUid = s.type === 'uid' || s.type === 'uid-simple';
+  return `
+    <div class="slot-item" data-slot-idx="${i}">
+      <div class="slot-header">
+        <div class="slot-title"><span class="slot-num">${i + 1}</span> 槽位 ${i + 1}</div>
+        ${groupSlots.length > 2 ? `<button class="slot-remove" onclick="removeGroupSlot(${i})">删除</button>` : ''}
+      </div>
+      <div class="slot-type-pills">
+        <div class="slot-type-pill ${s.type==='uid'?'active':''}" data-slot="${i}" data-type="uid" onclick="setSlotType(${i}, 'uid')">UID 固码</div>
+        <div class="slot-type-pill ${s.type==='uid-simple'?'active':''}" data-slot="${i}" data-type="uid-simple" onclick="setSlotType(${i}, 'uid-simple')">UID 直付</div>
+        <div class="slot-type-pill ${s.type==='face2face'?'active':''}" data-slot="${i}" data-type="face2face" onclick="setSlotType(${i}, 'face2face')">当面付直付</div>
+        <div class="slot-type-pill ${s.type==='face2face-dynamic'?'active':''}" data-slot="${i}" data-type="face2face-dynamic" onclick="setSlotType(${i}, 'face2face-dynamic')">当面付动态码</div>
+      </div>
+      <div class="slot-fields">
+        <div class="form-group">
+          <label class="form-label">商户名（可选）</label>
+          <input type="text" class="form-input" data-field="merchantName" data-slot="${i}" placeholder="如：商户${i+1}" style="font-family:inherit;" value="${escapeHtml(s.merchantName)}" oninput="onSlotFieldInput(${i}, 'merchantName', this.value)">
+        </div>
+        <div class="form-group">
+          <label class="form-label form-label-required">手机号</label>
+          <input type="tel" class="form-input" data-field="phone" data-slot="${i}" placeholder="11位手机号" maxlength="11" style="font-family:inherit;" value="${escapeHtml(s.phone)}" oninput="onSlotFieldInput(${i}, 'phone', this.value)">
+        </div>
+        ${isUid ? `
+          <div class="form-group">
+            <label class="form-label form-label-required">支付宝 UID</label>
+            <div class="form-hint">16位数字，2088开头</div>
+            <input type="text" class="form-input" data-field="alipayUid" data-slot="${i}" placeholder="2088..." style="font-family:Consolas,monospace;" maxlength="16" value="${escapeHtml(s.alipayUid)}" oninput="onSlotFieldInput(${i}, 'alipayUid', this.value)">
+          </div>
+        ` : `
+          <div class="form-group">
+            <label class="form-label form-label-required">支付宝 APPID</label>
+            <input type="text" class="form-input" data-field="appId" data-slot="${i}" placeholder="如：2021..." value="${escapeHtml(s.appId)}" oninput="onSlotFieldInput(${i}, 'appId', this.value)">
+          </div>
+          <div class="form-group">
+            <label class="form-label form-label-required">应用私钥（PKCS#1 / PKCS#8）</label>
+            <div class="form-hint">头尾自动补全</div>
+            <textarea class="form-textarea" data-field="privateKey" data-slot="${i}" placeholder="MIIE..." style="min-height:80px;" oninput="onSlotFieldInput(${i}, 'privateKey', this.value)">${escapeHtml(s.privateKey)}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label form-label-required">私钥格式</label>
+            <select class="form-input" data-field="keyType" data-slot="${i}" style="font-family:inherit;" onchange="onSlotFieldInput(${i}, 'keyType', this.value)">
+              <option value="auto" ${s.keyType==='auto'?'selected':''}>自动检测（推荐）</option>
+              <option value="PKCS8" ${s.keyType==='PKCS8'?'selected':''}>PKCS#8</option>
+              <option value="PKCS1" ${s.keyType==='PKCS1'?'selected':''}>PKCS#1</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label form-label-required">支付宝公钥</label>
+            <textarea class="form-textarea" data-field="alipayPublicKey" data-slot="${i}" placeholder="MIIB..." style="min-height:60px;" oninput="onSlotFieldInput(${i}, 'alipayPublicKey', this.value)">${escapeHtml(s.alipayPublicKey)}</textarea>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+function onSlotFieldInput(idx, field, value) {
+  if (groupSlots[idx]) groupSlots[idx][field] = value;
+}
+
+function setSlotType(idx, type) {
+  if (!groupSlots[idx]) return;
+  groupSlots[idx].type = type;
+  // 切换类型时清空对应字段，避免遗留
+  if (type === 'uid' || type === 'uid-simple') {
+    groupSlots[idx].appId = '';
+    groupSlots[idx].privateKey = '';
+    groupSlots[idx].alipayPublicKey = '';
+    groupSlots[idx].keyType = 'auto';
+  } else {
+    groupSlots[idx].alipayUid = '';
+  }
+  renderGroupSlots();
+}
+
+function addGroupSlot() {
+  // 新增槽位默认 UID 固码，避免初学者上来就配复杂的当面付
+  const idx = groupSlots.length;
+  groupSlots.push(createEmptySlot(idx, 'uid'));
+  renderGroupSlots();
+  // 滚动到底部
+  setTimeout(() => {
+    const list = document.getElementById('slotList');
+    list.lastElementChild && list.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, 50);
+}
+
+function removeGroupSlot(idx) {
+  if (groupSlots.length <= 2) {
+    showToast('多通道组至少需要 2 个槽位商户', 'error');
+    return;
+  }
+  groupSlots.splice(idx, 1);
+  // 重新编号
+  groupSlots.forEach((s, i) => s.idx = i);
+  renderGroupSlots();
+}
+
+async function submitGroup() {
+  const groupName = document.getElementById('inputGroupName').value.trim();
+  if (!groupName) return showToast('请输入多通道组名称', 'error');
+  if (groupSlots.length < 2) return showToast('至少需要 2 个槽位商户', 'error');
+
+  // 校验每个 slot
+  for (let i = 0; i < groupSlots.length; i++) {
+    const s = groupSlots[i];
+    if (!/^1\d{10}$/.test((s.phone||'').trim())) return showToast(`第 ${i+1} 个槽位：请输入有效的 11 位手机号`, 'error');
+    if (s.type === 'uid' || s.type === 'uid-simple') {
+      if (!/^\d{16}$/.test((s.alipayUid||'').trim())) return showToast(`第 ${i+1} 个槽位：UID 须为 16 位数字`, 'error');
+      if (!(s.alipayUid||'').startsWith('2088')) return showToast(`第 ${i+1} 个槽位：UID 须以 2088 开头`, 'error');
+    } else {
+      if (!(s.appId||'').trim()) return showToast(`第 ${i+1} 个槽位：请填写 APPID`, 'error');
+      if (!(s.privateKey||'').trim()) return showToast(`第 ${i+1} 个槽位：请填写应用私钥`, 'error');
+      if (!(s.alipayPublicKey||'').trim()) return showToast(`第 ${i+1} 个槽位：请填写支付宝公钥`, 'error');
+    }
+  }
+
+  const btn = document.getElementById('btnSubmitGroup');
+  btn.disabled = true;
+  btn.textContent = '创建中...';
+
+  try {
+    const res = await fetch('/api/groups', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ groupName, slots: groupSlots.map(s => ({
+        type: s.type,
+        merchantName: s.merchantName,
+        phone: s.phone,
+        alipayUid: s.alipayUid,
+        appId: s.appId,
+        privateKey: s.privateKey,
+        alipayPublicKey: s.alipayPublicKey,
+        keyType: s.keyType,
+      })) }),
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      showToast(`多通道组「${groupName}」创建成功，含 ${json.data.merchants.length} 个槽位`, 'success');
+      closeAddModal();
+      await fetchMerchants();
+      await fetchGroups();
+    } else {
+      showToast(json.message || '创建失败', 'error');
+    }
+  } catch (e) {
+    showToast('网络错误: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '创建多通道组';
+  }
 }
 
 function validatePhone(phone) {
@@ -1762,23 +2453,6 @@ function closeConfirm() {
   deleteId = null;
 }
 
-async function confirmDelete() {
-  if (!deleteId) return;
-  try {
-    const res = await fetch(`/api/merchants/${deleteId}`, { method: 'DELETE', headers: { 'Authorization': getToken() } });
-    const json = await res.json();
-    if (json.code === 'OK') {
-      showToast('删除成功', 'success');
-      closeConfirm();
-      await fetchMerchants();
-    } else {
-      showToast(json.message || '删除失败', 'error');
-    }
-  } catch (e) {
-    showToast('网络错误', 'error');
-  }
-}
-
 // ===== Toast =====
 let toastTimer = null;
 function showToast(msg, type) {
@@ -1792,6 +2466,7 @@ function showToast(msg, type) {
 // ===== 初始化 =====
 checkAuth();
 fetchMerchants();
+fetchGroups();
 
 // ESC 关闭弹窗
 document.addEventListener('keydown', (e) => {
