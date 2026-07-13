@@ -1252,17 +1252,37 @@ async function createQRCode() {
         qrBox.innerHTML = '<img src="' + qrImgSrc + '" style="width:220px;height:220px;display:block;margin:0 auto;border-radius:12px;background:#fff;padding:10px;" alt="支付二维码"/>';
       }
 
+      // 显示对方支付宝 UID（长按扫码失败时备选）
+      var uidForCopy = (qrcodeRes && qrcodeRes.uid) ? qrcodeRes.uid : '';
+      var uidBoxHtml = '';
+      if (uidForCopy) {
+        uidBoxHtml = '<div style="margin:10px auto 0;max-width:260px;background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.2);border-radius:10px;padding:10px 14px;">'
+          + '<div style="font-size:12px;color:rgba(212,175,55,0.55);margin-bottom:4px;">对方支付宝 UID</div>'
+          + '<div style="display:flex;align-items:center;gap:8px;">'
+          + '<div id="uidDisplayText" style="flex:1;font-size:14px;color:#f0d77a;font-weight:700;word-break:break-all;">' + uidForCopy + '</div>'
+          + '<button onclick="copyUidToClipboard()" style="background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.35);color:#d4af37;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">复制</button>'
+          + '</div></div>';
+      }
+      var uidBoxContainer = document.getElementById('uidBoxContainer');
+      if (!uidBoxContainer) {
+        uidBoxContainer = document.createElement('div');
+        uidBoxContainer.id = 'uidBoxContainer';
+        var paySection = document.getElementById('paySection');
+        if (paySection) paySection.insertBefore(uidBoxContainer, document.getElementById('payTip'));
+      }
+      uidBoxContainer.innerHTML = uidBoxHtml;
+
       // 提示文字
       var payTipEl = document.getElementById('payTip');
       if (payTipEl) {
         payTipEl.className = 'qr-tip';
-        payTipEl.innerHTML = '<span class="dot"></span> 请长按上方二维码，选择「识别二维码」进行支付';
+        payTipEl.innerHTML = '<span class="dot"></span> 请长按上方二维码，选择「识别二维码」进行支付；若无法识别，可复制下方 UID 到支付宝转账';
       }
 
-      // 底部按钮：刷新页面
+      // 底部按钮：刷新页面 + 复制UID
       var btnGroup = document.querySelector('#paySection .btn-group');
       if (btnGroup) {
-        btnGroup.innerHTML = '<button style="background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;width:100%;" onclick="location.reload()">刷新页面重新支付</button>';
+        btnGroup.innerHTML = '<button style="flex:1;background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;padding:14px 12px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;" onclick="location.reload()">刷新页面重新支付</button>';
       }
 
       // 监听页面可见性：用户从支付宝返回时报告支付完成并开始轮询
@@ -1383,6 +1403,42 @@ function downloadQR() {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+// ==================== UID 直付：复制 UID 到剪贴板（支付宝内置浏览器长按扫码失败时备选） ====================
+function copyUidToClipboard() {
+  var uidText = '';
+  var uidDisplay = document.getElementById('uidDisplayText');
+  if (uidDisplay) uidText = uidDisplay.textContent.trim();
+  if (!uidText) {
+    showError('未获取到 UID');
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(uidText).then(function() {
+      showError('UID 已复制，请打开支付宝转账');
+    }).catch(function() {
+      fallbackCopy(uidText);
+    });
+  } else {
+    fallbackCopy(uidText);
+  }
+
+  function fallbackCopy(text) {
+    var input = document.createElement('input');
+    input.value = text;
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+    input.select();
+    try {
+      document.execCommand('copy');
+      showError('UID 已复制，请打开支付宝转账');
+    } catch (e) {
+      showError('复制失败，请手动复制 UID');
+    }
+    document.body.removeChild(input);
+  }
 }
 
 // ==================== UID 直付：报告支付完成 ====================
