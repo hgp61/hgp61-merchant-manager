@@ -897,6 +897,7 @@
       <thead>
         <tr>
           <th>组名称</th>
+          <th>登录手机号</th>
           <th>组 ID</th>
           <th>槽位商户（轮询顺序）</th>
           <th>收银台链接</th>
@@ -958,6 +959,11 @@
         <label class="form-label form-label-required">多通道组名称</label>
         <div class="form-hint">例如"轮询收款A组"。同一组内的订单会按顺序轮流落到各槽位商户。</div>
         <input type="text" class="form-input" id="inputGroupName" placeholder="如：轮询收款A组" style="font-family:inherit;">
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label class="form-label form-label-required">登录手机号</label>
+        <div class="form-hint">该手机号作为多通道组的登录账号，默认密码 yy123456</div>
+        <input type="tel" class="form-input" id="inputGroupPhone" placeholder="11位手机号" maxlength="11" style="font-family:inherit;">
       </div>
 
       <div class="form-label" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
@@ -1348,6 +1354,7 @@ function renderGroups() {
     return `
       <tr>
         <td class="group-name-cell">${escapeHtml(g.name)}</td>
+        <td>${escapeHtml(g.phone || '')}</td>
         <td class="group-id-cell">${escapeHtml(g.id)}</td>
         <td>${slotPills}</td>
         <td><a class="cashier-link" href="${cashierUrl}" target="_blank">${cashierUrl.replace(/^https?:\/\//, '')}</a></td>
@@ -1419,6 +1426,10 @@ async function openGroupDetail(id) {
     <div class="detail-item detail-full">
       <div class="detail-label">组名称</div>
       <div class="detail-value">${escapeHtml(g.name)}</div>
+    </div>
+    <div class="detail-item">
+      <div class="detail-label">登录手机号</div>
+      <div class="detail-value">${escapeHtml(g.phone || '')}</div>
     </div>
     <div class="detail-item">
       <div class="detail-label">组 ID</div>
@@ -1670,6 +1681,7 @@ function switchAddMode(mode, reset) {
   document.getElementById('multiChannelPanel').style.display = (mode === 'multi') ? '' : 'none';
   if (reset && mode === 'multi') {
     document.getElementById('inputGroupName').value = '';
+    document.getElementById('inputGroupPhone').value = '';
     groupSlots = [
       createEmptySlot(0, 'uid'),
       createEmptySlot(1, 'face2face'),
@@ -1683,7 +1695,6 @@ function createEmptySlot(idx, type) {
     idx: idx,
     type: type,
     merchantName: '',
-    phone: '',
     alipayUid: '',
     appId: '',
     privateKey: '',
@@ -1716,10 +1727,6 @@ function renderSlotItem(s, i) {
         <div class="form-group">
           <label class="form-label">商户名（可选）</label>
           <input type="text" class="form-input" data-field="merchantName" data-slot="${i}" placeholder="如：商户${i+1}" style="font-family:inherit;" value="${escapeHtml(s.merchantName)}" oninput="onSlotFieldInput(${i}, 'merchantName', this.value)">
-        </div>
-        <div class="form-group">
-          <label class="form-label form-label-required">手机号</label>
-          <input type="tel" class="form-input" data-field="phone" data-slot="${i}" placeholder="11位手机号" maxlength="11" style="font-family:inherit;" value="${escapeHtml(s.phone)}" oninput="onSlotFieldInput(${i}, 'phone', this.value)">
         </div>
         ${isUid ? `
           <div class="form-group">
@@ -1799,13 +1806,14 @@ function removeGroupSlot(idx) {
 
 async function submitGroup() {
   const groupName = document.getElementById('inputGroupName').value.trim();
+  const groupPhone = document.getElementById('inputGroupPhone').value.trim();
   if (!groupName) return showToast('请输入多通道组名称', 'error');
+  if (!/^1\d{10}$/.test(groupPhone)) return showToast('请输入有效的 11 位登录手机号', 'error');
   if (groupSlots.length < 2) return showToast('至少需要 2 个槽位商户', 'error');
 
   // 校验每个 slot
   for (let i = 0; i < groupSlots.length; i++) {
     const s = groupSlots[i];
-    if (!/^1\d{10}$/.test((s.phone||'').trim())) return showToast(`第 ${i+1} 个槽位：请输入有效的 11 位手机号`, 'error');
     if (s.type === 'uid' || s.type === 'uid-simple') {
       if (!/^\d{16}$/.test((s.alipayUid||'').trim())) return showToast(`第 ${i+1} 个槽位：UID 须为 16 位数字`, 'error');
       if (!(s.alipayUid||'').startsWith('2088')) return showToast(`第 ${i+1} 个槽位：UID 须以 2088 开头`, 'error');
@@ -1824,10 +1832,9 @@ async function submitGroup() {
     const res = await fetch('/api/groups', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ groupName, slots: groupSlots.map(s => ({
+      body: JSON.stringify({ groupName, phone: groupPhone, slots: groupSlots.map(s => ({
         type: s.type,
         merchantName: s.merchantName,
-        phone: s.phone,
         alipayUid: s.alipayUid,
         appId: s.appId,
         privateKey: s.privateKey,

@@ -1388,15 +1388,14 @@ app.put('/api/merchants/:id/mgr-limits', requireAuth, (req, res) => {
 // ======================== 多通道组（轮询收款）API ========================
 
 // 辅助：规范化 & 校验一个 group slot 的配置
-function buildGroupSlot(slot) {
+function buildGroupSlot(slot, groupPhone) {
   if (!slot || !slot.type) throw new Error('slot 类型缺失');
   const slotType = slot.type;
   if (!['uid', 'uid-simple', 'face2face', 'face2face-dynamic'].includes(slotType)) {
     throw new Error('不支持的进件类型: ' + slotType);
   }
   const merchantName = (slot.merchantName || '').trim();
-  const phone = (slot.phone || '').trim();
-  if (!/^1\d{10}$/.test(phone)) throw new Error('请输入有效的 11 位手机号: ' + (merchantName || phone));
+  const phone = groupPhone;
   const out = {
     type: slotType,
     merchantName: merchantName || '多通道商户',
@@ -1405,15 +1404,15 @@ function buildGroupSlot(slot) {
   };
   if (slotType === 'uid' || slotType === 'uid-simple') {
     const uid = (slot.alipayUid || '').trim();
-    if (!/^\d{16}$/.test(uid) || !uid.startsWith('2088')) throw new Error('支付宝 UID 格式错误: ' + phone);
+    if (!/^\d{16}$/.test(uid) || !uid.startsWith('2088')) throw new Error('支付宝 UID 格式错误');
     out.alipayUid = uid;
   } else {
     const appId = (slot.appId || '').trim();
     let priv = (slot.privateKey || '').trim();
     const pub = (slot.alipayPublicKey || '').trim();
-    if (!appId) throw new Error('请填写 APPID: ' + phone);
-    if (!priv) throw new Error('请填写应用私钥: ' + phone);
-    if (!pub) throw new Error('请填写支付宝公钥: ' + phone);
+    if (!appId) throw new Error('请填写 APPID');
+    if (!priv) throw new Error('请填写应用私钥');
+    if (!pub) throw new Error('请填写支付宝公钥');
     if (!priv.includes('-----BEGIN') && !priv.includes('-----END')) {
       const kt = (slot.keyType || 'auto').toString().trim().toUpperCase();
       if (kt === 'PKCS1') {
@@ -1441,15 +1440,17 @@ function buildGroupSlot(slot) {
 
 app.post('/api/groups', requireAuth, (req, res) => {
   const groupName = (req.body.groupName || '').trim();
+  const groupPhone = (req.body.phone || '').trim();
   const slots = Array.isArray(req.body.slots) ? req.body.slots : [];
   if (!groupName) return res.json({ code: 'FAIL', message: '请输入多通道组名称' });
+  if (!/^1\d{10}$/.test(groupPhone)) return res.json({ code: 'FAIL', message: '请输入有效的 11 位登录手机号' });
   if (slots.length < 2) return res.json({ code: 'FAIL', message: '多通道进件至少需要 2 个商户' });
 
   // 校验 + 规范化
   const built = [];
   for (let i = 0; i < slots.length; i++) {
     try {
-      built.push(buildGroupSlot(slots[i]));
+      built.push(buildGroupSlot(slots[i], groupPhone));
     } catch (e) {
       return res.json({ code: 'FAIL', message: `第 ${i + 1} 个商户: ${e.message}` });
     }
@@ -1520,6 +1521,7 @@ app.post('/api/groups', requireAuth, (req, res) => {
   const group = {
     id: groupId,
     name: groupName,
+    phone: groupPhone,
     merchants: subMerchants.map(m => ({
       id: m.id, slotIndex: m.groupSlot, type: m.type,
       merchantName: m.merchantName, phone: m.phone, enabled: m.enabled !== false,
@@ -1830,6 +1832,52 @@ app.get('/g/:groupId/api/config', (req, res) => {
       enabled: true,
     }
   });
+});
+
+// 组级登录（用组手机号 + 默认密码 yy123456）
+app.post('/g/:groupId/api/login', express.json(), (req, res) => {
+  const { phone, password } = req.body;
+  const groupPhone = (req.group.phone || '').trim();
+  if (!phone || phone.trim() !== groupPhone) {
+    return res.status(400).json({ code: 'FAIL', message: '手机号或密码错误' });
+  }
+  if (!password || password !== 'yy123456') {
+    return res.status(400).json({ code: 'FAIL', message: '手机号或密码错误' });
+  }
+  const token = crypto.randomBytes(16).toString('hex');
+  // 使用第一个可用 slot 的 runtime 来存储 session
+  const first = (req.groupMerchants || []).find(s => s._merchant && s._runtime);
+  if (first && first._runtime) {
+    first._runtime.sessions = first._runtime.sessions || new Map();
+    first._runtime.sessions.set(token, { createdAt: Date.now() });
+  }
+  res.json({ code: 'OK', token, message: '登录成功' });
+});
+
+// 组级登录状态检查
+app.post('/g/:groupId/api/login/check', express.json(), (req, res) => {
+  const token = (req.headers.authorization || req.body.token || '').replace(/^Bearer\s+/, '').trim();
+  const first = (req.groupMerchants || []).find(s => s._merchant && s._runtime);
+  let valid = false;
+  if (first && first._runtime && first._runtime.sessions) {
+    const session = first._runtime.sessions.get(token);
+    valid = !!(session && Date.now() - session.createdAt < 24 * 60 * 60 * 1000);
+  }
+  res.json({ code: 'OK', loggedIn: valid });
+});
+
+// 组级 API 代理：未匹配的 /api/* 请求转发到第一个可用 slot 商户
+app.use('/g/:groupId/api', (req, res, next) => {
+  // 跳过已定义的组级 API
+  if (req.path === '/group-info' || req.path === '/limits' || req.path === '/config' ||
+      req.path === '/login' || req.path === '/login/check') {
+    return next();
+  }
+  const first = (req.groupMerchants || []).find(s => s._merchant);
+  if (!first) return res.status(404).json({ code: 'FAIL', message: '组无可用商户' });
+  // 转发到底层商户的对应 API
+  const subPath = req.path.replace(/^\//, '');
+  proxyToMerchant(req, res, first._merchant.id, 'api/' + subPath);
 });
 
 // 公共：组收银台 — 生成收款码（轮询选下一个 slot）
