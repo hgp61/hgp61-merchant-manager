@@ -1232,7 +1232,10 @@ async function createQRCode() {
     var isAlipayBrowser = /AlipayClient/i.test(navigator.userAgent);
 
     if (isAlipayBrowser && alipaysUrl) {
-      // 支付宝内置浏览器：使用 AlipayJSBridge 原生 API 唤起转账
+      // 支付宝内置浏览器：alipays:// scheme 被完全拦截
+      // 方案：通过支付宝官方 render.alipay.com 中转页打开 scheme
+      var renderUrl = 'https://render.alipay.com/p/s/i/?scheme=' + encodeURIComponent(alipaysUrl);
+
       // 显示"正在打开支付宝"状态
       document.getElementById('inputSection').style.display = 'none';
       document.getElementById('btnSection').style.display = 'none';
@@ -1251,61 +1254,45 @@ async function createQRCode() {
       var btnGroup = document.querySelector('#paySection .btn-group');
       if (btnGroup) btnGroup.innerHTML = '';
 
-      // 从 alipaysUrl 中解析 appId 和 query
-      var parsedUrl;
-      try { parsedUrl = new URL(alipaysUrl); } catch(e) { parsedUrl = null; }
-      var startAppId = '20000674';
-      var startQuery = '';
-      if (parsedUrl) {
-        startAppId = parsedUrl.searchParams.get('appId') || '20000674';
-        // 构建不含 appId 的 query string
-        var params = new URLSearchParams(parsedUrl.search);
-        params.delete('appId');
-        startQuery = params.toString();
-      }
+      // 存储到全局变量供重试按钮使用
+      window._renderUrl = renderUrl;
+      window._alipaysUrl = alipaysUrl;
 
-      // 尝试通过 AlipayJSBridge 打开支付宝转账页面
-      function tryAlipayBridge() {
+      // 方案1：尝试 AlipayJSBridge.pushWindow（可能直接处理 alipays://）
+      var bridgeTried = false;
+      function tryPushWindow() {
         if (window.AlipayJSBridge) {
           try {
-            AlipayJSBridge.call('startApp', {
-              appId: startAppId,
-              query: startQuery
-            }, function() {});
+            AlipayJSBridge.call('pushWindow', { url: alipaysUrl });
+            bridgeTried = true;
             return true;
           } catch(e) {
-            console.log('AlipayJSBridge startApp failed:', e);
+            console.log('pushWindow failed:', e);
           }
         }
         return false;
       }
 
-      // AlipayJSBridgeReady 后立即尝试
-      function onAlipayReady() {
-        tryAlipayBridge();
-      }
+      // AlipayJSBridgeReady 后尝试 pushWindow
       if (window.AlipayJSBridge) {
-        onAlipayReady();
+        tryPushWindow();
       } else {
-        document.addEventListener('AlipayJSBridgeReady', onAlipayReady, false);
+        document.addEventListener('AlipayJSBridgeReady', function() {
+          tryPushWindow();
+        }, false);
       }
 
-      // 同时尝试 location.href 作为备选
+      // 方案2：跳转到 render.alipay.com 中转页（300ms 后执行，给 pushWindow 一个机会）
       setTimeout(function() {
-        try { window.location.href = alipaysUrl; } catch(e) {}
-      }, 200);
+        window.location.href = renderUrl;
+      }, 300);
 
       // 3秒后如果仍在当前页面，显示手动按钮
       setTimeout(function() {
         if (document.visibilityState === 'visible') {
-          // 存储到全局变量供按钮使用
-          window._alipayStartAppId = startAppId;
-          window._alipayStartQuery = startQuery;
-          window._alipaysUrl = alipaysUrl;
           if (payTipEl) payTipEl.innerHTML = '<span class="dot"></span> 如未跳转，请点击下方按钮重试';
-          // 添加重试按钮
           if (btnGroup) {
-            btnGroup.innerHTML = '<button style="background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;width:100%;" onclick="retryAlipayOpen()">重新打开支付宝</button>';
+            btnGroup.innerHTML = '<button style="background:linear-gradient(135deg,#d4af37,#b8860b);color:#070707;border:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;width:100%;margin-bottom:10px;" onclick="retryAlipayOpen()">重新打开支付宝</button>';
           }
         }
       }, 3000);
@@ -1450,19 +1437,20 @@ function reportPaidUid() {
 
 // ==================== UID 直付：重试打开支付宝 ====================
 function retryAlipayOpen() {
-  var appId = window._alipayStartAppId || '20000674';
-  var query = window._alipayStartQuery || '';
-  var url = window._alipaysUrl || '';
-  // 优先使用 AlipayJSBridge
-  if (window.AlipayJSBridge) {
+  var renderUrl = window._renderUrl || '';
+  var alipaysUrl = window._alipaysUrl || '';
+  // 优先使用 AlipayJSBridge.pushWindow
+  if (window.AlipayJSBridge && alipaysUrl) {
     try {
-      AlipayJSBridge.call('startApp', { appId: appId, query: query }, function() {});
+      AlipayJSBridge.call('pushWindow', { url: alipaysUrl });
       return;
     } catch(e) {}
   }
-  // 备选：location.href
-  if (url) {
-    try { window.location.href = url; } catch(e) {}
+  // 备选：跳转 render.alipay.com 中转页
+  if (renderUrl) {
+    window.location.href = renderUrl;
+  } else if (alipaysUrl) {
+    window.location.href = 'https://render.alipay.com/p/s/i/?scheme=' + encodeURIComponent(alipaysUrl);
   }
 }
 
