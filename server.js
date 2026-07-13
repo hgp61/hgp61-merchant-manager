@@ -1936,20 +1936,25 @@ app.post('/g/:groupId/cashier/qrcode', express.json(), async (req, res) => {
           let qrDataUrl = '';
           try { qrDataUrl = await QRCode.toDataURL(tradeQrCode, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } }); } catch (e) {}
           if (m.type === 'uid-simple') {
-            return res.json({ code: 'OK', out_trade_no: outTradeNo, qr_code: tradeQrCode, qr_image: '', amount, subject, use_api: true, use_direct_redirect: true, message: '正在跳转支付宝...', slot_index: slotIndex });
+            let qrDataUrl = '';
+            try { qrDataUrl = await QRCode.toDataURL(tradeQrCode, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } }); } catch (e) {}
+            return res.json({ code: 'OK', out_trade_no: outTradeNo, qr_code: tradeQrCode, qr_image: qrDataUrl, amount, subject, use_api: true, use_direct_redirect: true, message: '请使用支付宝扫码', slot_index: slotIndex });
           }
           return res.json({ code: 'OK', out_trade_no: outTradeNo, qr_code: tradeQrCode, qr_image: qrDataUrl, amount, subject, use_api: true, message: '收款码已生成（自动确认模式）', slot_index: slotIndex });
         }
       } catch (e) { /* fallthrough */ }
     }
-    // 个人转账链接（仅标准 UID）
+    // 个人转账链接（uid-simple）
     if (m.type === 'uid-simple') {
       const alipaysUrl = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(JSON.stringify({ s: 'money', u: m.alipayUid, a: amtNum.toFixed(2), m: subject }))}`;
       rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: alipaysUrl, status: 'waiting', createdAt: Date.now(), groupId: req.group.id, slotIndex });
       setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
       rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: getClientIp(req), useTradeApi: false, groupId: req.group.id, slotIndex });
       saveMerchantFile(m.id, 'orders', rt.orders);
-      return res.json({ code: 'OK', out_trade_no: outTradeNo, qr_code: alipaysUrl, qr_image: '', amount, subject, use_api: false, use_direct_redirect: true, message: '正在跳转支付宝...', slot_index: slotIndex });
+      // 生成二维码图片，供非支付宝环境扫码
+      let qrDataUrl = '';
+      try { qrDataUrl = await QRCode.toDataURL(alipaysUrl, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } }); } catch (e) {}
+      return res.json({ code: 'OK', out_trade_no: outTradeNo, qr_code: alipaysUrl, qr_image: qrDataUrl, amount, subject, use_api: false, use_direct_redirect: true, message: '请使用支付宝扫码', slot_index: slotIndex });
     }
     // UID 标准模式生成二维码（用本机 base_url 走 /m/:slotMerchantId/pay/）
     const alipaysUrl = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(JSON.stringify({ s: 'money', u: m.alipayUid, a: amtNum.toFixed(2), m: subject }))}`;
@@ -2320,11 +2325,13 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
           try { qrDataUrl = await QRCode.toDataURL(tradeQrCode, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } }); } catch (e) {}
 
           if (m.type === 'uid-simple') {
+            let qrDataUrl = '';
+            try { qrDataUrl = await QRCode.toDataURL(tradeQrCode, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } }); } catch (e) {}
             return res.json({
-              code: 'OK', out_trade_no: outTradeNo, qr_code: tradeQrCode, qr_image: '',
+              code: 'OK', out_trade_no: outTradeNo, qr_code: tradeQrCode, qr_image: qrDataUrl,
               amount, subject, use_api: true,
               use_direct_redirect: true,
-              message: '正在跳转支付宝...',
+              message: '请使用支付宝扫码',
             });
           }
 
@@ -2343,18 +2350,21 @@ app.post('/m/:id/cashier/qrcode', express.json(), async (req, res) => {
     const alipaysUrl = `alipays://platformapi/startapp?appId=20000674&actionType=scan&biz_data=${encodeURIComponent(JSON.stringify({ s: 'money', u: m.alipayUid, a: amtNum.toFixed(2), m: subject }))}`;
 
     if (m.type === 'uid-simple') {
-      // UID 简易支付: 直接返回 alipays:// 链接，前端直接跳转，不生成二维码
+      // UID 简易支付: 直接返回 alipays:// 链接，前端在支付宝内直接跳转；非支付宝环境展示二维码
       rt.cashierOrders.set(outTradeNo, { amount, subject, body, qrCode: alipaysUrl, status: 'waiting', createdAt: Date.now() });
       setTimeout(() => rt.cashierOrders.delete(outTradeNo), 31 * 60 * 1000);
 
       rt.orders.push({ outTradeNo, amount: amtNum.toFixed(2), subject, status: 'generated', createdAt: new Date().toISOString(), paidAt: null, payerIp: getClientIp(req), useTradeApi: false });
       saveMerchantFile(m.id, 'orders', rt.orders);
 
+      let qrDataUrl = '';
+      try { qrDataUrl = await QRCode.toDataURL(alipaysUrl, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } }); } catch (e) {}
+
       return res.json({
-        code: 'OK', out_trade_no: outTradeNo, qr_code: alipaysUrl, qr_image: '',
+        code: 'OK', out_trade_no: outTradeNo, qr_code: alipaysUrl, qr_image: qrDataUrl,
         amount, subject, use_api: false,
         use_direct_redirect: true,
-        message: '正在跳转支付宝...',
+        message: '请使用支付宝扫码',
       });
     }
 
