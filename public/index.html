@@ -1377,7 +1377,7 @@ function renderGroups() {
         <td class="merchant-date">${dateStr}</td>
         <td>
           <div class="action-btns">
-            <a class="btn-login" href="${adminUrl}" target="_blank" style="margin-right:6px;">登录</a>
+            <button class="btn-login" onclick="autoLoginGroup('${g.id}')" style="margin-right:6px;">登录</button>
             <button class="btn-detail" onclick="openGroupDetail('${g.id}')">详情</button>
             <button class="btn-del" onclick="askDeleteGroup('${g.id}', '${escapeHtml(g.name)}')">删除</button>
           </div>
@@ -2229,6 +2229,27 @@ async function autoLoginMerchant(id) {
 
   try {
     // 管理员免密直接登录，无需密码验证
+    const res = await fetch(`${basePath}/api/login/admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const json = await res.json();
+    if (json.code === 'OK') {
+      const token = json.token || '';
+      window.open(`${basePath}/admin.html?token=${encodeURIComponent(token)}`, '_blank');
+    } else {
+      showToast(json.message || '登录失败', 'error');
+    }
+  } catch (e) {
+    showToast('登录失败: ' + e.message, 'error');
+  }
+}
+
+// ===== 组别登录（免密直接进入组后台） =====
+async function autoLoginGroup(groupId) {
+  const basePath = `/g/${groupId}`;
+  showToast('正在进入组别后台...', 'success');
+  try {
     const res = await fetch(`${basePath}/api/login/admin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

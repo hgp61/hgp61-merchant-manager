@@ -1866,11 +1866,28 @@ app.post('/g/:groupId/api/login/check', express.json(), (req, res) => {
   res.json({ code: 'OK', loggedIn: valid });
 });
 
+// 组级管理员免密登录 — 商户管理系统调用，无需密码
+app.post('/g/:groupId/api/login/admin', express.json(), (req, res) => {
+  const groupPhone = (req.group.phone || '').trim();
+  const token = crypto.randomBytes(24).toString('hex');
+  const first = (req.groupMerchants || []).find(s => s._merchant && s._runtime);
+  if (first && first._runtime) {
+    first._runtime.sessions = first._runtime.sessions || new Map();
+    first._runtime.sessions.set(token, {
+      createdAt: Date.now(),
+      phone: groupPhone,
+      isAdmin: true,
+    });
+  }
+  console.log(`[组 ${req.group.id}] 管理员免密登录 (phone=${groupPhone})`);
+  return res.json({ code: 'OK', token, message: '管理员直接登录' });
+});
+
 // 组级 API 代理：未匹配的 /api/* 请求转发到第一个可用 slot 商户
 app.use('/g/:groupId/api', (req, res, next) => {
   // 跳过已定义的组级 API
   if (req.path === '/group-info' || req.path === '/limits' || req.path === '/config' ||
-      req.path === '/login' || req.path === '/login/check') {
+      req.path === '/login' || req.path === '/login/check' || req.path === '/login/admin') {
     return next();
   }
   const first = (req.groupMerchants || []).find(s => s._merchant);
