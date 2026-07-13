@@ -872,6 +872,34 @@
   </div>
 </div>
 
+<!-- 多通道组列表 -->
+<div class="group-section" id="groupSection" style="display:none;">
+  <div class="section-header">
+    <div class="section-title">多通道组（轮询收款）</div>
+    <div class="merchant-count" id="groupCount"></div>
+  </div>
+  <div class="group-table-wrap">
+    <table class="group-table" id="groupTable">
+      <thead>
+        <tr>
+          <th>组名称</th>
+          <th>登录手机号</th>
+          <th>槽位商户（轮询顺序）</th>
+          <th>收银台</th>
+          <th>管理后台</th>
+          <th>创建时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="groupBody"></tbody>
+    </table>
+    <div class="empty-state" id="groupEmptyState" style="display:none;">
+      <div class="empty-icon">🔁</div>
+      <div class="empty-text">暂无多通道组。在「增加商户」弹窗中选择「多通道进件」可创建。</div>
+    </div>
+  </div>
+</div>
+
 <!-- 商户列表 -->
 <div class="merchant-section">
   <div class="section-header">
@@ -897,34 +925,6 @@
     <div class="empty-state" id="emptyState" style="display:none;">
       <div class="empty-icon">📦</div>
       <div class="empty-text">暂无商户，点击右上角「增加商户」开始</div>
-    </div>
-  </div>
-</div>
-
-<!-- 多通道组列表 -->
-<div class="group-section" id="groupSection" style="display:none;">
-  <div class="section-header">
-    <div class="section-title">多通道组（轮询收款）</div>
-    <div class="merchant-count" id="groupCount"></div>
-  </div>
-  <div class="group-table-wrap">
-    <table class="group-table" id="groupTable">
-      <thead>
-        <tr>
-          <th>组名称</th>
-          <th>登录手机号</th>
-          <th>槽位商户（轮询顺序）</th>
-          <th>收银台</th>
-          <th>管理后台</th>
-          <th>创建时间</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="groupBody"></tbody>
-    </table>
-    <div class="empty-state" id="groupEmptyState" style="display:none;">
-      <div class="empty-icon">🔁</div>
-      <div class="empty-text">暂无多通道组。在「增加商户」弹窗中选择「多通道进件」可创建。</div>
     </div>
   </div>
 </div>
